@@ -22,7 +22,7 @@ def serial_ports() -> list[dict]:
     return [
         {"port": port.device, "description": port.description, "vid": port.vid, "pid": port.pid}
         for port in list_ports.comports()
-        if port.vid in {0x10C4, 0x1A86, 0x303A, 0x0403}
+        if port.vid in {0x10C4, 0x1A86, 0x303A, 0x0403, 0x2886}
     ]
 
 
@@ -44,14 +44,14 @@ class Calibration(BaseModel):
 
 class BridgeSelection(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    mode: Literal["adb", "ble"]
+    mode: Literal["adb", "ble", "usb"]
     port: str | None = Field(None, max_length=200)
     confirm_phone: bool = False
 
     @model_validator(mode="after")
     def confirm_binding(self):
-        if self.mode == "ble" and not self.confirm_phone:
-            raise ValueError("Confirm that this BLE board is paired with the selected phone")
+        if self.mode != "adb" and not self.confirm_phone:
+            raise ValueError("Confirm that this HID board controls the selected phone")
         return self
 
 
@@ -81,6 +81,12 @@ class SerialBridge:
         self._closing = False
         self._last_heartbeat = 0.0
 
+    ready_field = "ble_connected"
+
+    @property
+    def hid_ready(self) -> bool:
+        return self.ble_connected
+
     @property
     def connected(self) -> bool:
         return bool(self.session and not self._error and not self._closing)
@@ -90,6 +96,7 @@ class SerialBridge:
             "port": self.port,
             "connected": self.connected,
             "ble_connected": self.ble_connected,
+            "hid_ready": self.hid_ready,
             "firmware": self.firmware,
             "ble_name": "Android Agent BLE",
             "error": self._error,
@@ -135,6 +142,40 @@ class SerialBridge:
             if not future.done():
                 future.set_exception(DeviceError(message))
 
+    def _receive(self, line: bytes) -> None:
+        try:
+            response = json.loads(line)
+        except (ValueError, UnicodeDecodeError):
+            return  # UART boot messages are not protocol responses.
+        if (not isinstance(response, dict) or type(response.get("v")) is not int
+                or response["v"] != PROTOCOL):
+            return
+        incoming_session = response.get("session")
+        if self.session and incoming_session != self.session:
+            self._fail("Board session changed; reconnect before controlling")
+            return
+        if not self.session and (not isinstance(incoming_session, str)
+                                 or len(incoming_session) != 32):
+            return
+        if type(response.get(self.ready_field)) is not bool:
+            self._fail("Invalid HID connection state")
+            return
+        self.ble_connected = response[self.ready_field]
+        if response.get("status") == "heartbeat":
+            self._last_heartbeat = time.monotonic()
+        if response.get("error") in {"stale_session", "heartbeat_expired", "ble_disconnected",
+                                     "usb_disconnected", "hid_report_failed"}:
+            self._fail("HID report was not submitted; check the phone and reconnect"
+                       if response.get("error") == "hid_report_failed"
+                       else "Board or phone disconnected; reconnect before controlling")
+            return
+        if response.get("status") in {"accepted", "running"}:
+            return
+        command_id = response.get("id")
+        future = self._pending.get(command_id) if type(command_id) is int else None
+        if future and not future.done():
+            future.set_result(response)
+
     async def _read(self) -> None:
         buffer = bytearray()
         try:
@@ -147,48 +188,9 @@ class SerialBridge:
                     if len(line) > 1024:
                         self._fail("Oversized bridge response; reconnect the board")
                         return
-                    try:
-                        response = json.loads(line)
-                    except (ValueError, UnicodeDecodeError):
-                        continue  # ESP boot messages are not protocol responses.
-                    if (
-                        not isinstance(response, dict)
-                        or type(response.get("v")) is not int
-                        or response["v"] != PROTOCOL
-                    ):
-                        continue
-                    incoming_session = response.get("session")
-                    if self.session and incoming_session != self.session:
-                        self._fail("Board session changed; reconnect before controlling")
+                    self._receive(line)
+                    if self._error:
                         return
-                    if not self.session and (
-                        not isinstance(incoming_session, str) or len(incoming_session) != 32
-                    ):
-                        continue
-                    if type(response.get("ble_connected")) is not bool:
-                        self._fail("Invalid BLE connection state")
-                        return
-                    self.ble_connected = response["ble_connected"]
-                    if response.get("status") == "heartbeat":
-                        self._last_heartbeat = time.monotonic()
-                    if response.get("error") in {
-                        "stale_session",
-                        "heartbeat_expired",
-                        "ble_disconnected",
-                        "hid_report_failed",
-                    }:
-                        self._fail(
-                            "HID report was not submitted; check Bluetooth and reconnect"
-                            if response.get("error") == "hid_report_failed"
-                            else "Board or phone disconnected; reconnect before controlling"
-                        )
-                        return
-                    if response.get("status") in {"accepted", "running"}:
-                        continue
-                    command_id = response.get("id")
-                    future = self._pending.get(command_id) if type(command_id) is int else None
-                    if future and not future.done():
-                        future.set_result(response)
                 if len(buffer) > 1024:
                     self._fail("Oversized bridge response; reconnect the board")
                     return
@@ -277,9 +279,9 @@ class SerialBridge:
             return {
                 "cancelled": True,
                 "release": "hid_release_sent"
-                if result["ble_connected"] and result.get("release_sent") is True
+                if result[self.ready_field] and result.get("release_sent") is True
                 else "unconfirmed_hid_release"
-                if result["ble_connected"]
+                if result[self.ready_field]
                 else "board_state_cleared_phone_disconnected",
             }
         except DeviceError:
@@ -310,7 +312,7 @@ class BleController:
 
     @property
     def capabilities(self) -> list[str]:
-        if not self.bridge.connected or not self.bridge.ble_connected:
+        if not self.bridge.connected or not self.bridge.hid_ready:
             return []
         caps = self.bridge.capabilities
         if not self.calibration:
@@ -320,15 +322,15 @@ class BleController:
     async def execute(self, action: Action, frame: Frame) -> dict:
         if action.action not in self.capabilities:
             raise DeviceError(
-                "BLE action unavailable; check board connection, pairing and calibration"
+                "HID action unavailable; check board connection, phone binding and calibration"
             )
         if frame.serial != self.phone:
-            raise DeviceError("BLE board is bound to a different phone")
+            raise DeviceError("HID board is bound to a different phone")
         name = action.action
         args = {"action": name}
         if name in {"tap", "long_press", "swipe", "scroll"}:
             if not self.calibration:
-                raise DeviceError("Calibrate the BLE mouse before coordinate actions")
+                raise DeviceError("Calibrate the HID mouse before coordinate actions")
             self.calibration.check(frame)
             start = (action.x1, action.y1) if name == "swipe" else (action.x, action.y)
             args["x"], args["y"] = self.calibration.point(*start)
@@ -342,7 +344,7 @@ class BleController:
             args["text"] = action.text
         elif name == "key":
             if action.key not in KEYS:
-                raise DeviceError("This Android navigation/media key has not been verified for BLE")
+                raise DeviceError("This Android navigation/media key has not been verified for HID")
             args["key"] = action.key
         else:
             args["duration_ms"] = action.duration_ms
@@ -354,8 +356,8 @@ class BleController:
         }
 
     async def locate(self, probe: PointerProbe) -> dict:
-        if not self.bridge.connected or not self.bridge.ble_connected:
-            raise DeviceError("Pair the phone with Android Agent BLE first")
+        if not self.bridge.connected or not self.bridge.hid_ready:
+            raise DeviceError("Connect the HID board to the phone first")
         await self.bridge.request("action", action="locate", x=probe.x, y=probe.y)
         return {"ok": True}
 

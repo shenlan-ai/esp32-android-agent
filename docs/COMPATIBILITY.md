@@ -10,7 +10,9 @@
 |---|---|---|
 | 当前连接：ESP32-D0WD-V3，revision v3.1，4MB Flash | BLE HID，电脑串口传输 | COM5 芯片与 Flash 已实测；esp32dev 固件构建、刷写及写后校验通过；10项板上协议与2项生产主机检查通过，手机输入待验收 |
 | 通用 ESP32 DevKit / WROOM（经典 ESP32） | BLE HID | 与当前芯片系列相同；商品板引脚、Flash 与供电仍需核对 |
-| ESP32-S3 DevKitC-1 / XIAO ESP32S3 / ESP32-S3 Zero | 原生 USB HID | 常见板型适配目标；待固件构建与实机验证，必须使用原生 USB 接口 |
+| ESP32-S3 DevKitC-1 N8（8MB） | 原生 USB HID | 固件构建通过，程序737277B、RAM56784B；实机待验证 |
+| XIAO ESP32S3（8MB） | 原生 USB HID | 固件构建通过，程序723745B、RAM56336B；实机待验证 |
+| ESP32-S3 Zero（4MB） | 原生 USB HID | 通用配置构建通过，程序737277B、RAM56784B；无PSRAM/GPIO依赖，实机待验证 |
 | ESP32-S2 | 原生 USB HID | 芯片能力支持，待配置与实测 |
 | ESP32-C3 / C6 / H2 | BLE HID | 芯片具有 BLE；当前不提供已验证固件，USB Serial/JTAG 不等于 USB HID |
 
@@ -19,6 +21,8 @@ CP2102/CH340 是串口桥，不是 ESP 主芯片型号。不能据此选择 S3 �
 当前板子通过 USB 连接电脑、通过蓝牙控制手机，因此可以继续用 USB ADB 采集手机画面；也可选择无线 ADB。S3/S2 若占用手机 USB 口，则通常需要无线 ADB 采集。
 
 具体检测证据和命令见 [开发板识别](BOARD-IDENTIFICATION.md)。
+
+S3 主机 TCP 的随机挑战认证、会话、心跳、取消、超时不重放和显式重连，以及 CDC 配网身份检查已模拟验证；中英网页配网、绑定、独立校准与断线重绑已通过离线浏览器验收。没有 S3 实物或安卓手机参与这些检查，USB 枚举不能代替手机身份确认。三个配置均须使用原生 USB，采集须无线 ADB；见 [USB使用说明](USB-SETUP.md)。
 
 ## 自动任务
 

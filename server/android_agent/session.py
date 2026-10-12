@@ -7,6 +7,7 @@ from .controller import AdbController
 from .errors import DeviceError
 from .models import Action
 from .screen import AdbScreen, Frame, validate_decision
+from .usb import UsbController
 
 
 class DeviceSession:
@@ -64,7 +65,7 @@ class DeviceSession:
         async with self._lock:
             self._guard_selection(serial)
             if self._agent_owner is not None and self.controller.mode != "adb":
-                raise DeviceError("Reconnect the BLE board without changing the task control mode")
+                raise DeviceError("Reconnect the HID board without changing the task control mode")
             await self._close_controller()
             self._epoch += 1
             self.serial = serial
@@ -80,21 +81,32 @@ class DeviceSession:
     ) -> None:
         self.guard_manual()
         if not self.serial:
-            raise DeviceError("Select the phone before binding a BLE board")
+            raise DeviceError("Select the phone before binding a HID board")
         if self._lock.locked() or self._stopping:
             raise DeviceError("Stop the current operation before switching control mode")
         async with self._lock:
             self.guard_manual()
             if self._agent_owner is not None and self.controller.mode != mode:
                 raise DeviceError("Stop the paused task before changing its control mode")
+            if mode not in {"adb", "ble", "usb"}:
+                raise DeviceError("Choose an explicit supported control mode")
+            if mode == "usb":
+                devices = await self.adb.devices()
+                if not any(d.serial == self.serial and d.state == "device" and d.transport == "wireless"
+                           for d in devices):
+                    raise DeviceError("USB HID requires an online wireless ADB phone; pair and connect it first")
+            if mode != "adb" and not bridge:
+                raise DeviceError("Connect a HID board first")
+            if self.controller and getattr(self.controller, "bridge", None) is bridge and mode != "adb":
+                await bridge.open()
+                return
             self._epoch += 1
             await self._close_controller()
             self.controller = AdbController(self.adb, self.serial)
-            if mode == "ble":
-                if not bridge:
-                    raise DeviceError("Select a board serial port")
-                # A failed explicit switch remains BLE/unavailable, never silently ADB.
-                self.controller = BleController(bridge, self.serial, calibration)
+            if mode != "adb":
+                # A failed explicit switch remains HID/unavailable, never silently ADB.
+                controller = UsbController if mode == "usb" else BleController
+                self.controller = controller(bridge, self.serial, calibration)
                 await bridge.open()
 
     async def calibrate(self, calibration: Calibration) -> None:
@@ -104,10 +116,10 @@ class DeviceSession:
         async with self._lock:
             self.guard_manual()
             if not isinstance(self.controller, BleController):
-                raise DeviceError("Connect the BLE board before calibrating")
-            if not self.controller.bridge.connected or not self.controller.bridge.ble_connected:
+                raise DeviceError("Connect the HID board before calibrating")
+            if not self.controller.bridge.connected or not self.controller.bridge.hid_ready:
                 raise DeviceError(
-                    "Pair the phone and connect the BLE board before saving calibration"
+                    "Connect the HID board to the phone before saving calibration"
                 )
             frame = await self.screen.capture(force=True)
             calibration.check(frame)
@@ -121,7 +133,7 @@ class DeviceSession:
         async with self._lock:
             self.guard_manual()
             if epoch != self._epoch or not isinstance(self.controller, BleController):
-                raise DeviceError("BLE calibration operation cancelled or unavailable")
+                raise DeviceError("HID calibration operation cancelled or unavailable")
             self._active = asyncio.current_task()
             try:
                 return await self.controller.locate(probe)
@@ -167,7 +179,7 @@ class DeviceSession:
                     raise DeviceError("Action is unavailable for the selected controller")
                 if isinstance(self.controller, BleController) and action.action in {"tap", "long_press", "swipe", "scroll"}:
                     if not self.controller.calibration:
-                        raise DeviceError("Calibrate the BLE mouse before coordinate actions")
+                        raise DeviceError("Calibrate the HID mouse before coordinate actions")
                     self.controller.calibration.check(current)
                 if on_submit:
                     on_submit(current)

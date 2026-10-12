@@ -1,6 +1,7 @@
 import { screenPoint } from './geometry.js';
 import { messages } from './i18n.js';
 import { createTaskView } from './tasks.js';
+import { createUsbSetup } from './usb.js';
 
 const $ = id => document.getElementById(id);
 let language = 'zh', token = '', csrf = '', status = null, frameId = null, blobUrl = '';
@@ -63,7 +64,8 @@ async function loadSettings() {
   $('max-tokens').value = prefs.max_total_tokens; $('save-screenshots').checked = prefs.save_screenshots;
 }
 function displayCalibration(prefs) {
-  const saved = prefs.ble_calibrations?.[status?.serial];
+  const saved = status?.mode === 'usb' ? prefs.usb_calibrations?.[`${status?.board?.board_id}:${status?.serial}`]
+    : prefs.ble_calibrations?.[status?.serial];
   $('counts-x').value = saved?.counts_x ?? 1000;
   $('counts-y').value = saved?.counts_y ?? 1000;
 }
@@ -108,8 +110,10 @@ async function poll() {
       $('mode-label').textContent = status.serial ? `${status.mode.toUpperCase()} · ${status.serial}` : t('noSelection');
       const board = status.board;
       $('board-status').textContent = !board ? t('boardInactive') : !board.connected ? `${t('boardDisconnected')} ${board.error || ''}`
-        : !board.ble_connected ? t('boardPairNeeded') : !status.calibrated ? t('boardCalibrateNeeded') : t('boardReady');
-      for (const id of ['probe-x','probe-y','save-calibration']) $(id).disabled = !(board?.connected && board.ble_connected && status.serial);
+        : !board.hid_ready ? t(status.mode === 'usb' ? 'usbHostNeeded' : 'boardPairNeeded')
+        : !status.calibrated ? t('boardCalibrateNeeded') : t('boardReady');
+      for (const id of ['probe-x','probe-y','save-calibration']) $(id).disabled = !(board?.connected && board.hid_ready && status.serial);
+      usb.status(status);
       document.querySelectorAll('[data-action]').forEach(button => { button.disabled = !status.capabilities.includes(button.dataset.action); });
       tasks.status(status);
     }
@@ -164,7 +168,7 @@ $('refresh-boards').addEventListener('click', () => guarded(refreshBoards));
 for (const mode of ['adb', 'ble']) $('use-' + mode).addEventListener('click', () => guarded(async () => {
   if (mode === 'ble' && !$('confirm-board-phone').checked) throw new Error(t('boardConfirmNeeded'));
   await api('/api/control/mode', { mode, port:mode === 'ble' ? $('board-port').value : null, confirm_phone:$('confirm-board-phone').checked });
-  status = await api('/api/status'); message(t('modeSelected'), true);
+  status = await api('/api/status'); displayCalibration(await api('/api/settings')); message(t('modeSelected'), true);
 }));
 for (const axis of ['x', 'y']) $('probe-' + axis).addEventListener('click', () => guarded(() => api('/api/control/locate', {
   x:axis === 'x' ? Number($('counts-x').value) : 0, y:axis === 'y' ? Number($('counts-y').value) : 0,
@@ -200,6 +204,9 @@ $('settings-form').addEventListener('submit', event => { event.preventDefault();
 async function stop() { const result = await api('/api/stop', {}); message(t('stopped') + result.release, true); }
 $('emergency-stop').addEventListener('click', () => guarded(stop));
 document.addEventListener('keydown', event => { if (event.key === 'Escape') guarded(stop); });
-$('language').addEventListener('click', () => { language = language === 'zh' ? 'en' : 'zh'; try { localStorage.setItem('language',language); } catch { /* optional */ } translate(); tasks.translated(); });
+$('language').addEventListener('click', () => { language = language === 'zh' ? 'en' : 'zh'; try { localStorage.setItem('language',language); } catch { /* optional */ } translate(); tasks.translated(); usb.translated(); });
 $('access-login').addEventListener('click', () => guarded(async () => { token = $('access-token').value; try { sessionStorage.setItem('access-token',token); } catch { /* optional */ } await initialize(); }));
+const usb = createUsbSetup({ api, guarded, t, message, onMode:async () => {
+  status = await api('/api/status'); displayCalibration(await api('/api/settings'));
+} });
 translate(); guarded(initialize); poll(); refreshFrame();

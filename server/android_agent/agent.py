@@ -130,7 +130,7 @@ class TaskRunner:
             raise ModelError("Set and save a vision model name before running a task")
         old = self.redactor.secrets
         self.redactor = Redactor([*old, self.access_token, prefs.actor.api_key.get_secret_value(),
-                                  prefs.planner.api_key.get_secret_value()])
+                                  prefs.planner.api_key.get_secret_value(), prefs.usb_pair_key.get_secret_value()])
 
     async def start(self, goal: str, prefs: Preferences) -> dict:
         async with self._control_lock:
@@ -323,7 +323,7 @@ class TaskRunner:
 
     def _context(self) -> dict:
         controller = self.session.controller
-        keys = BLE_KEYS if self.mode == "ble" else set(KEYS)
+        keys = BLE_KEYS if self.mode in {"ble", "usb"} else set(KEYS)
         return {"goal": self.goal, "plan": self.plan, "capabilities": controller.capabilities,
                 "allowed_keys": sorted(keys), "latest_observation": self.last_observation,
                 "recent_steps": self.redactor.clean(self.steps[-5:])}
@@ -392,7 +392,7 @@ class TaskRunner:
                     needs_plan = False
                 await self._state("observing")
                 reply = await self._query("actor", ACT_PROMPT, self._context(), [frame])
-                keys = BLE_KEYS if self.mode == "ble" else set(KEYS)
+                keys = BLE_KEYS if self.mode in {"ble", "usb"} else set(KEYS)
                 decision = parse_decision(reply.text, self.session.controller.capabilities, keys)
                 if isinstance(decision, MetaDecision):
                     if decision.action == "fail":

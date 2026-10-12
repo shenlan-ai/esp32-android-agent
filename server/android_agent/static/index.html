@@ -48,11 +48,20 @@
           <form id="connect-form" class="row"><label class="sr-only" for="connect-address" data-i18n="connectAddress">连接地址</label><input id="connect-address" placeholder="192.168.1.10:41000" required><button data-i18n="connect">连接</button><button id="discover" type="button" data-i18n="discover">发现服务</button></form>
           <ul id="discovered-services" class="service-list"></ul>
         </details>
-        <details id="board-setup"><summary data-i18n="boardSetup">ESP32 蓝牙控制</summary>
+        <details id="board-setup"><summary data-i18n="boardSetup">ESP32 HID 控制</summary>
           <p class="helper" data-i18n="boardHelp">经典 ESP32 插在电脑上，通过蓝牙连接手机。先刷入 BLE 固件，再在手机蓝牙设置中配对 Android Agent BLE。</p>
           <div class="row"><label class="sr-only" for="board-port" data-i18n="boardPort">开发板串口</label><select id="board-port"><option value="">选择开发板串口</option></select><button id="refresh-boards" type="button" data-i18n="refreshBoards">刷新串口</button></div>
-          <label class="checkbox"><input id="confirm-board-phone" type="checkbox"><span data-i18n="confirmBoardPhone">我确认这块板子配对的是当前选择的手机</span></label>
-          <div class="row"><button id="use-ble" type="button" data-i18n="useBle">使用 BLE 控制</button><button id="use-adb" type="button" data-i18n="useAdb">使用 ADB 控制</button></div>
+          <details id="usb-setup"><summary data-i18n="usbSetup">ESP32-S3 原生 USB 配网</summary>
+            <p class="helper" data-i18n="usbHelp">先将已刷 USB 固件的 S3 原生 USB 口接到电脑，选择上方串口并写入配网。手机需要无线 ADB；配网后将板子接到手机的 OTG 口。S3 不使用 BLE 配对。</p>
+            <form id="usb-form">
+              <div class="fields"><label><span data-i18n="wifiSsid">2.4GHz Wi-Fi 名称</span><input id="usb-ssid" maxlength="32" autocomplete="off" required></label><label><span data-i18n="wifiPassword">Wi-Fi 密码</span><input id="usb-password" type="password" maxlength="63" autocomplete="off"></label><label><span data-i18n="computerIp">电脑局域网 IPv4</span><input id="usb-host" placeholder="192.168.1.20" autocomplete="off" required></label></div>
+              <div class="row"><button id="configure-usb" type="submit" data-i18n="configureUsb">写入 S3 配网</button><button id="enable-usb" type="button" data-i18n="enableUsb">启用板子监听</button><button id="disable-usb" type="button" data-i18n="disableUsb">关闭板子监听</button></div>
+            </form>
+            <p id="usb-listener-status" class="helper" role="status"></p>
+            <p class="helper" data-i18n="usbBoundary">仅在可信局域网使用，放行电脑的板子 TCP 端口。网页仍只在本机开放；枚举成功不能证明板子插入哪台手机，需要你确认并手动验收。</p>
+          </details>
+          <label class="checkbox"><input id="confirm-board-phone" type="checkbox"><span data-i18n="confirmBoardPhone">我确认这块板子通过 BLE 配对或 USB 插入当前选择的手机</span></label>
+          <div class="row"><button id="use-ble" type="button" data-i18n="useBle">使用 BLE 控制</button><button id="use-usb" type="button" data-i18n="useUsb">使用 S3 USB 控制</button><button id="use-adb" type="button" data-i18n="useAdb">使用 ADB 控制</button></div>
           <p id="board-status" class="helper" role="status"></p>
           <details><summary data-i18n="calibration">鼠标校准</summary>
             <p class="helper" data-i18n="calibrationHelp">手机关闭指针加速（若可设置）。每次测试会把鼠标归位到左上角，再移动指定计数，不会点击。分别测试水平和垂直计数，找到刚好到达右、下边缘的值，然后保存。旋转后需重新校准。</p>

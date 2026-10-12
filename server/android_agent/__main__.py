@@ -17,6 +17,7 @@ def main() -> None:
     )
     parser.add_argument("--port", type=int, help="Default: 8890")
     parser.add_argument("--adb", help="Path to adb executable")
+    parser.add_argument("--usb-port", type=int, help="Board TCP port; default 8891, enabled after provisioning")
     args = parser.parse_args()
     try:
         settings = RuntimeSettings.from_env()
@@ -26,6 +27,8 @@ def main() -> None:
             settings.port = args.port
         if args.adb:
             settings.adb_path = args.adb
+        if args.usb_port:
+            settings.usb_port = args.usb_port
         settings = RuntimeSettings.model_validate(settings.model_dump())
         settings.check_access()
     except (AgentError, ValueError) as exc:

@@ -66,10 +66,15 @@ class Preferences(BaseModel):
     max_total_tokens: int = Field(100000, ge=1000, le=2000000)
     save_screenshots: bool = False
     ble_calibrations: dict[str, Calibration] = Field(default_factory=dict)
+    usb_calibrations: dict[str, Calibration] = Field(default_factory=dict)
+    usb_enabled: bool = False
+    usb_board_id: str = ""
+    usb_pair_key: SecretStr = SecretStr("")
 
     def public(self) -> dict:
-        data = self.model_dump(exclude={"actor", "planner"})
-        return {**data, "actor": self.actor.public(), "planner": self.planner.public()}
+        data = self.model_dump(exclude={"actor", "planner", "usb_pair_key"})
+        return {**data, "usb_pair_key_set": bool(self.usb_pair_key.get_secret_value()),
+                "actor": self.actor.public(), "planner": self.planner.public()}
 
 
 class ModelUpdate(BaseModel):
@@ -100,6 +105,8 @@ class RuntimeSettings(BaseModel):
     access_token: SecretStr = SecretStr("")
     command_timeout: float = 10
     preview_interval: float = 0.8
+    usb_host: str = "0.0.0.0"
+    usb_port: int = Field(8891, ge=1, le=65535)
 
     @property
     def local_only(self) -> bool:
@@ -113,6 +120,8 @@ class RuntimeSettings(BaseModel):
             "host": os.getenv("ANDROID_AGENT_HOST", "127.0.0.1"),
             "port": int(os.getenv("ANDROID_AGENT_PORT", "8890")),
             "access_token": os.getenv("ANDROID_AGENT_ACCESS_TOKEN", ""),
+            "usb_host": os.getenv("ANDROID_AGENT_USB_HOST", "0.0.0.0"),
+            "usb_port": int(os.getenv("ANDROID_AGENT_USB_PORT", "8891")),
         }
         settings = cls(**values)
         settings.check_access()
@@ -157,6 +166,7 @@ class ConfigStore:
 
     def save(self, prefs: Preferences) -> None:
         data = prefs.model_dump(mode="json")
+        data["usb_pair_key"] = prefs.usb_pair_key.get_secret_value()
         for role in ("actor", "planner"):
             data[role]["api_key"] = getattr(prefs, role).api_key.get_secret_value()
         self.path.parent.mkdir(parents=True, exist_ok=True)

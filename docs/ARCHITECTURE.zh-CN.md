@@ -1,6 +1,6 @@
 # ESP32 Android Agent 整体设计
 
-状态：整体设计基线。ADB手动工作台、单步自动任务闭环与经典ESP32 BLE串口路线已实现；当前板已刷入并验证通信。原生USB板路线、发布包和手机实机验收仍需完成，各项验证状态见COMPATIBILITY.md。
+状态：整体设计基线。ADB手动工作台、单步自动任务闭环、经典ESP32 BLE串口和S3原生USB路线已实现；当前经典板已刷入并验证通信。S3构建/协议模拟与实机证据区分；发布包和手机实机验收仍需完成，各项状态见COMPATIBILITY.md。
 
 参考项目：<https://github.com/onehumanbeing/esp32-iphone-agent>，参考提交 `27f36ce0f5d2d520ad5a45a0eea6eb99abbbe6f7`。
 
@@ -26,7 +26,7 @@
 
 ESP32 插入手机时，手机通常作为 USB 主机。普通连接方式下，不能假定同一 USB 口还能同时通过 USB ADB 连接电脑。ESP32 主模式因此以无线 ADB 为默认画面通道，USB 扩展坞不作为解决双角色问题的默认方案。
 
-当前连接板由 esptool 实测为 ESP32-D0WD-V3 v3.1 / 4MB。经典 ESP32 无原生 USB HID，采用电脑串口控制 + BLE 键鼠连接手机；此时手机 USB 口可继续连接电脑运行 ADB。该路线不需要配置板子 Wi-Fi，先在手机系统蓝牙设置主动配对，再在网页绑定当前手机并校准。S3/S2 的原生 USB 路线保留，但不将芯片能力视为已构建或已实测固件。
+当前连接板由 esptool 实测为 ESP32-D0WD-V3 v3.1 / 4MB。经典 ESP32 无原生 USB HID，采用电脑串口 + BLE 键鼠，手机 USB 口可继续运行 ADB，板子无需 Wi-Fi。S3 提供三个固定构建、CDC/NVS 配网和认证 TCP，详见 [USB说明](USB-SETUP.md)；S2 尚未提供固件。构建和协议模拟不能替代实机验收。
 
 Android 11 及以上优先使用系统无线调试配对。旧系统提供先通过 USB 开启 ADB TCP/IP、再接 ESP32 的兼容流程。连接向导区分配对端口和连接端口，优先自动发现，支持手动地址兜底。
 

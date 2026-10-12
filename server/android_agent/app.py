@@ -13,7 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
 from . import __version__
 from .adb import AdbClient
@@ -31,8 +31,10 @@ from .errors import AgentError
 from .history import EventBus, TraceStore
 from .llm import ModelClient, ModelProtocolError, parse_object
 from .models import Action
+from .provision import UsbProvision, provision_board
 from .screen import AdbScreen
 from .session import DeviceSession
+from .usb import UsbController, UsbListener
 
 STATIC = Path(__file__).parent / "static"
 
@@ -65,6 +67,11 @@ class Goal(BaseModel):
     goal: str = Field(min_length=1, max_length=2000)
 
 
+class ListenerSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool
+
+
 def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=ModelClient) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -88,6 +95,15 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
         app.state.runner = TaskRunner(app.state.session, app.state.traces, app.state.events,
                                       model_factory, runtime.access_token.get_secret_value())
         app.state.model_probe = None
+        app.state.usb = UsbListener(runtime.usb_host, runtime.usb_port)
+        app.state.usb_configure = None
+        app.state.usb_management = asyncio.Lock()
+        if app.state.preferences.usb_enabled:
+            try:
+                await app.state.usb.start(app.state.preferences.usb_pair_key.get_secret_value(),
+                                          app.state.preferences.usb_board_id)
+            except AgentError:
+                pass  # Listener diagnostics remain available; ADB still works.
         try:
             yield
         finally:
@@ -97,7 +113,12 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
                     await asyncio.gather(app.state.model_probe, return_exceptions=True)
                 await app.state.runner.stop()
             finally:
-                await app.state.session.close()
+                try:
+                    if app.state.usb_configure:
+                        await asyncio.gather(app.state.usb_configure, return_exceptions=True)
+                    await app.state.session.close()
+                finally:
+                    await app.state.usb.close()
 
     app = FastAPI(title="ESP32 Android Agent", version=__version__, lifespan=lifespan)
 
@@ -191,6 +212,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
             if isinstance(session.controller, BleController)
             else None,
             "calibrated": calibrated,
+            "usb": app.state.usb.public(),
         }
 
     @app.get("/api/boards")
@@ -206,13 +228,90 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
                 raise ValueError("Choose a connected ESP USB/UART serial port")
             bridge = SerialBridge(selection.port)
         calibration = app.state.preferences.ble_calibrations.get(session.serial)
+        if selection.mode == "usb":
+            bridge = app.state.usb.current
+            if not bridge or not bridge.connected:
+                raise AgentError("USB board is offline; provision it and connect its native USB port to the phone")
+            calibration = app.state.preferences.usb_calibrations.get(f"{bridge.board_id}:{session.serial}")
         await session.set_mode(selection.mode, bridge, calibration)
         return {"ok": True, "mode": selection.mode}
+
+    @app.post("/api/usb/listener")
+    async def usb_listener(selection: ListenerSelection):
+        async with app.state.usb_management:
+            app.state.session.guard_manual()
+            if app.state.usb_configure and not app.state.usb_configure.done():
+                raise AgentError("Wait for USB configuration to finish")
+            prefs = app.state.preferences
+            if selection.enabled:
+                await app.state.usb.start(prefs.usb_pair_key.get_secret_value(), prefs.usb_board_id)
+            else:
+                if isinstance(app.state.session.controller, UsbController):
+                    await app.state.session.stop()
+                await app.state.usb.close()
+            prefs = app.state.preferences.model_copy(deep=True)
+            prefs.usb_enabled = selection.enabled
+            app.state.store.save(prefs)
+            app.state.preferences = prefs
+            return app.state.usb.public()
+
+    @app.post("/api/usb/configure")
+    async def configure_usb(config: UsbProvision):
+        session = app.state.session
+        session.guard_manual()
+        if session._agent_owner is not None or session._lock.locked() or session._stopping:
+            raise AgentError("Finish the current task or operation before provisioning a USB board")
+        if app.state.usb_configure and not app.state.usb_configure.done():
+            raise AgentError("USB configuration is already running")
+        if config.port not in {p["port"] for p in serial_ports()}:
+            raise ValueError("Choose a connected ESP native USB serial port")
+        if isinstance(session.controller, BleController):
+            raise AgentError("Switch to ADB control before configuring a USB board")
+
+        async def configure():
+            async with app.state.usb_management, session._lock:
+                session.guard_manual()
+                if session._agent_owner is not None or isinstance(session.controller, BleController):
+                    raise AgentError("Finish the task and switch to ADB before configuring a USB board")
+                await app.state.usb.close()
+                key = secrets.token_hex(32)
+                try:
+                    board_id = await asyncio.to_thread(provision_board, config, key, app.state.usb.port)
+                    prefs = app.state.preferences.model_copy(deep=True)
+                    prefs.usb_pair_key, prefs.usb_board_id, prefs.usb_enabled = SecretStr(key), board_id, True
+                    app.state.store.save(prefs)
+                    app.state.preferences = prefs
+                    await app.state.usb.start(key, board_id)
+                    return {"ok": True, "board_id": board_id, "listener": app.state.usb.public()}
+                except BaseException:
+                    prefs = app.state.preferences
+                    if prefs.usb_enabled:
+                        try:
+                            await app.state.usb.start(prefs.usb_pair_key.get_secret_value(), prefs.usb_board_id)
+                        except AgentError:
+                            pass
+                    raise
+        pending = asyncio.create_task(configure(), name="usb-board-configuration")
+        app.state.usb_configure = pending
+
+        def configuration_finished(completed):
+            if not completed.cancelled():
+                completed.exception()  # Consume errors even if the browser disconnected.
+            if app.state.usb_configure is completed:
+                app.state.usb_configure = None
+        pending.add_done_callback(configuration_finished)
+        # Keep ownership until completion. Awaiting unshielded after cancellation would
+        # propagate middleware cancellation into the write and lose its matching host key.
+        return await asyncio.shield(pending)
 
     @app.post("/api/control/calibrate")
     async def calibrate(calibration: Calibration):
         await app.state.session.calibrate(calibration)
-        app.state.preferences.ble_calibrations[calibration.phone] = calibration
+        controller = app.state.session.controller
+        if isinstance(controller, UsbController):
+            app.state.preferences.usb_calibrations[f"{controller.bridge.board_id}:{calibration.phone}"] = calibration
+        else:
+            app.state.preferences.ble_calibrations[calibration.phone] = calibration
         app.state.store.save(app.state.preferences)
         return {"ok": True}
 

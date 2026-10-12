@@ -1,0 +1,1 @@
+openspec/specs/usb-hid-control/spec.md
