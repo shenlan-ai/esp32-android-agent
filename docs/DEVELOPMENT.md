@@ -73,9 +73,11 @@ python -m unittest discover -s scripts/tests
 
 `check_workflows.py`使用dev依赖PyYAML6.0.3检查只读权限、固定Actions、矩阵和产物范围；完整GitHub语法可用 [actionlint](https://github.com/rhysd/actionlint) 检查两个workflow。源码模式与普通用户运行不需要PyYAML。
 
-`.github/workflows/portable.yml`仅接受workflow_dispatch，在Windows/Python3.12构建四板与便携包，解压到中文/空格路径并运行真实exe smoke；通过后保存ZIP+SHA artifact 7天，不创建GitHub Release。当前已完成本机等效测试和actionlint1.7.12语法检查，**尚未执行GitHub远程CI**，不能将配置验证描述为远程运行成功。远程Linux/最低Python矩阵和实机任务分别需要对应环境验收。
+`.github/workflows/portable.yml`仅接受workflow_dispatch，在Windows/Python3.12构建四板与便携包，解压到中文/空格路径并运行真实exe smoke；通过后保存ZIP+SHA artifact 7天，不创建GitHub Release。当前已完成本机等效测试和actionlint1.7.12语法检查，**尚未执行GitHub远程CI**，不能将配置验证描述为远程运行成功。Windows/Python3.10.21已在独立环境实测通过，3.12.14同步回归；最低安装仅核心依赖的真实启动也通过。Linux/远程CI和实机任务仍需要对应环境验收，详见 [兼容性证据](COMPATIBILITY.md)。
 
 S3 原生 USB 固件矩阵：`python -m platformio run -d hardware/usb_bridge`。它直接复用 BLE 固件的动作调度与验证 headers，原生 g++ 检查继续通过 `python -m unittest discover -s scripts/tests` 执行。USB TCP/CDC 测试不需要设备；网页配网 fixture 为 `python server/tests/usb_demo.py`，仅本机 8892/8893，带 DEMO 标识，结束后关闭服务。详见 [USB说明](USB-SETUP.md)。
+
+中英文最短入口见 [README](../README.md) / [English](../README.en.md)，起始条件明确的任务见 [示例](EXAMPLES.md)。真实手机与模型验收使用 [结果模板](ACCEPTANCE.md)；按实际控制模式、机型/Android/API、固件/代码/模型版本和起始条件记录，不能以软件测试证明全机型兼容。
 
 自动任务关键测试使用MockTransport、假手机/控制器/模型，不调用付费接口。离线浏览器验收可执行：
 

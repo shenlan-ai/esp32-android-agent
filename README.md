@@ -1,5 +1,7 @@
 # ESP32 Android Agent
 
+[English](README.en.md) · [上手示例](docs/EXAMPLES.md) · [实机验收](docs/ACCEPTANCE.md)
+
 本地运行的安卓视觉操作项目：ESP32 通过 HID 操作手机，ADB 获取画面，视觉模型规划与验证任务。经典 ESP32 使用电脑串口 + BLE 键鼠；S3 使用 Wi-Fi + 原生 USB 键鼠和无线 ADB。
 
 同时提供无硬件的 ADB 体验路径。手动连接验证不要求模型账号；自动任务使用用户配置的 OpenAI 兼容视觉模型。
