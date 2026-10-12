@@ -5,12 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "esp32-android-agent"
 version = "0.1.0"
-description = "Local Android vision agent with ADB and ESP32 USB HID"
+description = "Local Android vision agent with ADB and ESP32 HID"
 requires-python = ">=3.10"
 license = "MIT"
 dependencies = [
   "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "httpx>=0.27,<1",
   "pillow>=11,<13", "pydantic>=2.10,<3",
+  "pyserial==3.5",
 ]
 
 [project.optional-dependencies]

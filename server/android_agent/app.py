@@ -7,12 +7,20 @@ from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from . import __version__
 from .adb import AdbClient
+from .ble import (
+    BleController,
+    BridgeSelection,
+    Calibration,
+    PointerProbe,
+    SerialBridge,
+    serial_ports,
+)
 from .config import ConfigStore, PreferencesUpdate, RuntimeSettings
 from .errors import AgentError
 from .models import Action
@@ -20,6 +28,15 @@ from .screen import AdbScreen
 from .session import DeviceSession
 
 STATIC = Path(__file__).parent / "static"
+
+
+def index_html() -> str:
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    for asset in ("app.js", "style.css"):
+        html = html.replace(
+            f'"/static/{asset}"', f'"/static/{asset}?v={(STATIC / asset).stat().st_mtime_ns}"'
+        )
+    return html
 
 
 class Selection(BaseModel):
@@ -87,6 +104,8 @@ def create_app(settings: RuntimeSettings | None = None, adb=None) -> FastAPI:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "same-origin"
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; connect-src 'self'"
         )
@@ -117,7 +136,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None) -> FastAPI:
 
     @app.get("/")
     async def index():
-        return FileResponse(STATIC / "index.html")
+        return HTMLResponse(index_html())
 
     @app.get("/api/session")
     async def browser_session():
@@ -126,6 +145,15 @@ def create_app(settings: RuntimeSettings | None = None, adb=None) -> FastAPI:
     @app.get("/api/status")
     async def status():
         session = app.state.session
+        calibrated = False
+        if isinstance(session.controller, BleController) and session.controller.calibration:
+            calibration = session.controller.calibration
+            frame = session.screen.frame
+            calibrated = bool(
+                frame
+                and (calibration.phone, calibration.width, calibration.height)
+                == (frame.serial, frame.width, frame.height)
+            )
         return {
             "version": __version__,
             "adb_available": app.state.adb.available,
@@ -134,7 +162,38 @@ def create_app(settings: RuntimeSettings | None = None, adb=None) -> FastAPI:
             "capabilities": session.controller.capabilities if session.controller else [],
             "frame": session.screen.frame.public() if session.screen.frame else None,
             "agent": {"available": False, "state": "idle", "steps": []},
+            "board": session.controller.bridge.public()
+            if isinstance(session.controller, BleController)
+            else None,
+            "calibrated": calibrated,
         }
+
+    @app.get("/api/boards")
+    async def boards():
+        return {"ports": serial_ports()}
+
+    @app.post("/api/control/mode")
+    async def control_mode(selection: BridgeSelection):
+        session = app.state.session
+        bridge = None
+        if selection.mode == "ble":
+            if not selection.port or selection.port not in {p["port"] for p in serial_ports()}:
+                raise ValueError("Choose a connected ESP USB/UART serial port")
+            bridge = SerialBridge(selection.port)
+        calibration = app.state.preferences.ble_calibrations.get(session.serial)
+        await session.set_mode(selection.mode, bridge, calibration)
+        return {"ok": True, "mode": selection.mode}
+
+    @app.post("/api/control/calibrate")
+    async def calibrate(calibration: Calibration):
+        await app.state.session.calibrate(calibration)
+        app.state.preferences.ble_calibrations[calibration.phone] = calibration
+        app.state.store.save(app.state.preferences)
+        return {"ok": True}
+
+    @app.post("/api/control/locate")
+    async def locate(probe: PointerProbe):
+        return await app.state.session.locate(probe)
 
     @app.get("/api/devices")
     async def devices():

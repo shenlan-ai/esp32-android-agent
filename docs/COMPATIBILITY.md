@@ -1,0 +1,21 @@
+# 兼容性与验证状态
+
+## Android
+
+适配目标为最近稳定三代：Android 15 / API 35、Android 16 / API 36、Android 17 / API 37。标准 ADB 和 HID 协议用于减少厂商依赖；目标覆盖不等于每个品牌和机型已经实机通过。当前尚无手机验收记录。
+
+## 开发板
+
+| 芯片/配置 | 控制路线 | 证据与状态 |
+|---|---|---|
+| 当前连接：ESP32-D0WD-V3，revision v3.1，4MB Flash | BLE HID，电脑串口传输 | COM5 芯片与 Flash 已实测；esp32dev 固件构建通过，主机与模拟界面验证完成；尚未刷入，手机输入待验收 |
+| 通用 ESP32 DevKit / WROOM（经典 ESP32） | BLE HID | 与当前芯片系列相同；商品板引脚、Flash 与供电仍需核对 |
+| ESP32-S3 / XIAO ESP32-S3 | 原生 USB HID | 计划目标；待固件构建与实机验证，必须使用原生 USB 接口 |
+| ESP32-S2 | 原生 USB HID | 芯片能力支持，待配置与实测 |
+| ESP32-C3 / C6 / H2 | BLE HID | 芯片具有 BLE；当前不提供已验证固件，USB Serial/JTAG 不等于 USB HID |
+
+CP2102/CH340 是串口桥，不是 ESP 主芯片型号。不能据此选择 S3 固件。未明确支持的芯片系列由检测工具返回未知路线。
+
+当前板子通过 USB 连接电脑、通过蓝牙控制手机，因此可以继续用 USB ADB 采集手机画面；也可选择无线 ADB。S3/S2 若占用手机 USB 口，则通常需要无线 ADB 采集。
+
+具体检测证据和命令见 [开发板识别](BOARD-IDENTIFICATION.md)。

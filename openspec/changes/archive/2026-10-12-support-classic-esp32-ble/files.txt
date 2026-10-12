@@ -1,0 +1,14 @@
+hardware/**
+server/**
+scripts/flash_board.py
+scripts/tests/test_flash_board.py
+scripts/tests/test_firmware_engine.py
+.gitignore
+README.md
+docs/ARCHITECTURE.zh-CN.md
+docs/COMPATIBILITY.md
+docs/BOARD-IDENTIFICATION.md
+docs/BLE-SETUP.md
+openspec/specs/ble-serial-control/spec.md
+openspec/specs/board-identification/spec.md
+openspec/specs/product-foundation/spec.md

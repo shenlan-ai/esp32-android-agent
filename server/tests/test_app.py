@@ -67,3 +67,25 @@ def test_invalid_text_never_reaches_device(client, fake_adb):
     response = client.post("/api/action", json={"action": "type", "text": "中文"})
     assert response.status_code == 422
     assert not fake_adb.calls
+
+
+def test_ble_binding_requires_confirmation_and_selected_phone(client):
+    response = client.post("/api/control/mode", json={"mode": "ble", "port": "COM5"})
+    assert response.status_code == 422
+    assert client.get("/api/status").json()["mode"] is None
+
+
+def test_calibration_is_not_allowed_in_adb_mode(client):
+    client.post("/api/devices/select", json={"serial": "phone1"})
+    response = client.post(
+        "/api/control/calibrate",
+        json={
+            "phone": "phone1",
+            "width": 200,
+            "height": 400,
+            "counts_x": 800,
+            "counts_y": 1200,
+        },
+    )
+    assert response.status_code == 409
+    assert not client.get("/api/settings").json()["ble_calibrations"]

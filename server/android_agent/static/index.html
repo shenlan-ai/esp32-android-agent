@@ -48,6 +48,18 @@
           <form id="connect-form" class="row"><label class="sr-only" for="connect-address" data-i18n="connectAddress">连接地址</label><input id="connect-address" placeholder="192.168.1.10:41000" required><button data-i18n="connect">连接</button><button id="discover" type="button" data-i18n="discover">发现服务</button></form>
           <ul id="discovered-services" class="service-list"></ul>
         </details>
+        <details id="board-setup"><summary data-i18n="boardSetup">ESP32 蓝牙控制</summary>
+          <p class="helper" data-i18n="boardHelp">经典 ESP32 插在电脑上，通过蓝牙连接手机。先刷入 BLE 固件，再在手机蓝牙设置中配对 Android Agent BLE。</p>
+          <div class="row"><label class="sr-only" for="board-port" data-i18n="boardPort">开发板串口</label><select id="board-port"><option value="">选择开发板串口</option></select><button id="refresh-boards" type="button" data-i18n="refreshBoards">刷新串口</button></div>
+          <label class="checkbox"><input id="confirm-board-phone" type="checkbox"><span data-i18n="confirmBoardPhone">我确认这块板子配对的是当前选择的手机</span></label>
+          <div class="row"><button id="use-ble" type="button" data-i18n="useBle">使用 BLE 控制</button><button id="use-adb" type="button" data-i18n="useAdb">使用 ADB 控制</button></div>
+          <p id="board-status" class="helper" role="status"></p>
+          <details><summary data-i18n="calibration">鼠标校准</summary>
+            <p class="helper" data-i18n="calibrationHelp">手机关闭指针加速（若可设置）。每次测试会把鼠标归位到左上角，再移动指定计数，不会点击。分别测试水平和垂直计数，找到刚好到达右、下边缘的值，然后保存。旋转后需重新校准。</p>
+            <div class="fields"><label><span data-i18n="countsX">水平计数</span><input id="counts-x" type="number" min="100" max="4000" value="1000"></label><label><span data-i18n="countsY">垂直计数</span><input id="counts-y" type="number" min="100" max="4000" value="1000"></label></div>
+            <div class="row"><button id="probe-x" data-i18n="probeX">测试右边缘</button><button id="probe-y" data-i18n="probeY">测试下边缘</button><button id="save-calibration" data-i18n="saveCalibration">保存当前方向校准</button></div>
+          </details>
+        </details>
       </section>
 
       <section class="task-section">

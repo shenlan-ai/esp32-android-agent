@@ -16,6 +16,7 @@ function translate() {
     if (el.dataset.keySet !== undefined) el.textContent = t(el.dataset.keySet === 'true' ? 'keySaved' : 'keyMissing');
   }
   if ($('device-select').options.length) $('device-select').options[0].text = t('chooseDevice');
+  if ($('board-port').options.length) $('board-port').options[0].text = t('boardPort');
   $('language').textContent = language === 'zh' ? 'English' : '中文';
 }
 function headers(extra = {}) { return { 'X-Agent-Token': token, 'X-Agent-CSRF': csrf, ...extra }; }
@@ -40,8 +41,14 @@ async function refreshDevices() {
   if (status?.serial) $('device-select').value = status.serial;
   $('device-diagnostic').textContent = data.devices.length ? '' : t('noDevices');
 }
+async function refreshBoards() {
+  const data = await api('/api/boards');
+  $('board-port').replaceChildren(new Option(t('boardPort'), ''), ...data.ports.map(port => new Option(`${port.port} · ${port.description}`, port.port)));
+  if (status?.board) $('board-port').value = status.board.port;
+}
 async function loadSettings() {
   const prefs = await api('/api/settings');
+  displayCalibration(prefs);
   for (const role of ['actor', 'planner']) {
     $(`${role}-base`).value = prefs[role].base_url;
     $(`${role}-model`).value = prefs[role].model;
@@ -50,6 +57,11 @@ async function loadSettings() {
   }
   $('max-steps').value = prefs.max_steps; $('max-seconds').value = prefs.max_seconds;
   $('max-tokens').value = prefs.max_total_tokens; $('save-screenshots').checked = prefs.save_screenshots;
+}
+function displayCalibration(prefs) {
+  const saved = prefs.ble_calibrations?.[status?.serial];
+  $('counts-x').value = saved?.counts_x ?? 1000;
+  $('counts-y').value = saved?.counts_y ?? 1000;
 }
 async function saveSettings() {
   const body = { max_steps: Number($('max-steps').value), max_seconds: Number($('max-seconds').value), max_total_tokens: Number($('max-tokens').value), save_screenshots: $('save-screenshots').checked };
@@ -89,6 +101,11 @@ async function poll() {
       $('connection-state').textContent = t('connected');
       $('mode-label').textContent = status.serial ? `${status.mode.toUpperCase()} · ${status.serial}` : t('noSelection');
       $('task-state').textContent = status.agent.state === 'idle' ? t('idle') : status.agent.state;
+      const board = status.board;
+      $('board-status').textContent = !board ? t('boardInactive') : !board.connected ? `${t('boardDisconnected')} ${board.error || ''}`
+        : !board.ble_connected ? t('boardPairNeeded') : !status.calibrated ? t('boardCalibrateNeeded') : t('boardReady');
+      for (const id of ['probe-x','probe-y','save-calibration']) $(id).disabled = !(board?.connected && board.ble_connected && status.serial);
+      document.querySelectorAll('[data-action]').forEach(button => { button.disabled = !status.capabilities.includes(button.dataset.action); });
     }
   } catch (error) { $('connection-state').textContent = error.message; }
   setTimeout(poll, 1000);
@@ -98,8 +115,10 @@ async function initialize() {
   $('version').textContent = `v${session.version}`; $('access-section').hidden = true;
   status = await api('/api/status'); await loadSettings();
   await guarded(refreshDevices);
+  await guarded(refreshBoards);
 }
 async function sendAction(action) {
+  if (status && !status.capabilities.includes(action.action)) throw new Error(t('actionUnavailable'));
   if (frameId) action.frame_id = frameId;
   return await api('/api/action', action);
 }
@@ -134,8 +153,25 @@ live.addEventListener('wheel', event => {
 }, { passive:false });
 document.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', () => guarded(() => sendAction({ action:button.dataset.action }))));
 $('refresh-devices').addEventListener('click', () => guarded(refreshDevices));
+$('refresh-boards').addEventListener('click', () => guarded(refreshBoards));
+for (const mode of ['adb', 'ble']) $('use-' + mode).addEventListener('click', () => guarded(async () => {
+  if (mode === 'ble' && !$('confirm-board-phone').checked) throw new Error(t('boardConfirmNeeded'));
+  await api('/api/control/mode', { mode, port:mode === 'ble' ? $('board-port').value : null, confirm_phone:$('confirm-board-phone').checked });
+  status = await api('/api/status'); message(t('modeSelected'), true);
+}));
+for (const axis of ['x', 'y']) $('probe-' + axis).addEventListener('click', () => guarded(() => api('/api/control/locate', {
+  x:axis === 'x' ? Number($('counts-x').value) : 0, y:axis === 'y' ? Number($('counts-y').value) : 0,
+})));
+$('save-calibration').addEventListener('click', () => guarded(async () => {
+  if (!status?.serial || !frameId) throw new Error(t('calibrationNeedsScreen'));
+  await api('/api/control/calibrate', { phone:status.serial, width:live.naturalWidth, height:live.naturalHeight,
+    counts_x:Number($('counts-x').value), counts_y:Number($('counts-y').value) });
+  message(t('saved'),true);
+}));
 $('select-device').addEventListener('click', () => guarded(async () => {
   await api('/api/devices/select', { serial:$('device-select').value }); status = await api('/api/status'); hideFrame(); message(t('selected'),true);
+  $('confirm-board-phone').checked = false;
+  displayCalibration(await api('/api/settings'));
 }));
 $('pair-form').addEventListener('submit', event => { event.preventDefault(); guarded(async () => {
   await api('/api/adb/pair', { address:$('pair-address').value.trim(), code:$('pair-code').value }); $('pair-code').value = ''; message(t('paired'),true);

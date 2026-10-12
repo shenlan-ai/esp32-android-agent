@@ -1,0 +1,4 @@
+scripts/identify_board.py
+scripts/tests/test_identify_board.py
+docs/BOARD-IDENTIFICATION.md
+docs/COMPATIBILITY.md

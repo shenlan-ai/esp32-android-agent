@@ -16,4 +16,5 @@ traces/
 .runtime-local/
 .coverage
 htmlcov/
+.pio/
 .DS_Store

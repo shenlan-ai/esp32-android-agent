@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
+from .ble import Calibration
 from .errors import AgentError
 
 
@@ -59,6 +60,7 @@ class Preferences(BaseModel):
     max_failures: int = Field(3, ge=1, le=10)
     max_total_tokens: int = Field(100000, ge=1000, le=2000000)
     save_screenshots: bool = False
+    ble_calibrations: dict[str, Calibration] = Field(default_factory=dict)
 
     def public(self) -> dict:
         data = self.model_dump(exclude={"actor", "planner"})
