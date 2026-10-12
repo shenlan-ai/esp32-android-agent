@@ -2,6 +2,8 @@
 
 已验证工具：OpenSpec 1.13.1。Windows 下若 PowerShell 限制 npm 脚本，使用 `openspec.cmd`。项目文件使用 UTF-8。
 
+2026-10-12本机验证环境：Python3.12.14、Node24.21.0。`implement-verified-agent`旧归档验证记录中的“Node25”为版本笔误；实际测试在Node24.21.0执行。更正证据见`correct-agent-validation-environment`，测试计数与结果保持原记录。普通用户运行服务不需要Node。
+
 ## 开始变更
 
 ```text
