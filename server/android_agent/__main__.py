@@ -19,6 +19,8 @@ def main() -> None:
     parser.add_argument("--adb", help="Path to adb executable")
     parser.add_argument("--data-dir", type=Path, help="User data directory (outside the program)")
     parser.add_argument("--diagnose", action="store_true", help="Print diagnostics and exit")
+    parser.add_argument("--firmware-dir", type=Path, help="Validated firmware catalog directory")
+    parser.add_argument("--firmware-tool", type=Path, help="Separate firmware worker executable")
     browser = parser.add_mutually_exclusive_group()
     browser.add_argument("--open-browser", dest="browser", action="store_true")
     browser.add_argument("--no-browser", dest="browser", action="store_false")
@@ -34,6 +36,10 @@ def main() -> None:
         settings.adb_path = resolve_adb(args.adb)
         if args.data_dir is not None:
             settings.data_dir = args.data_dir
+        if args.firmware_dir is not None:
+            settings.firmware_dir = args.firmware_dir
+        if args.firmware_tool is not None:
+            settings.firmware_tool = args.firmware_tool
         if args.usb_port is not None:
             settings.usb_port = args.usb_port
         settings = RuntimeSettings.model_validate(settings.model_dump())

@@ -3,10 +3,11 @@ export function createUsbSetup({ api, guarded, t, message, onMode }) {
   let busy = false, latest = null;
   function render() {
     const usb = latest?.usb;
-    $('configure-usb').disabled = busy || !['adb', null, undefined].includes(latest?.mode);
-    $('enable-usb').disabled = busy || usb?.listening || !usb?.paired_board;
-    $('disable-usb').disabled = busy || !usb?.listening;
-    $('use-usb').disabled = busy || !usb?.board?.connected;
+    const unavailable = busy || latest?.firmware?.busy;
+    $('configure-usb').disabled = unavailable || !['adb', null, undefined].includes(latest?.mode);
+    $('enable-usb').disabled = unavailable || usb?.listening || !usb?.paired_board;
+    $('disable-usb').disabled = unavailable || !usb?.listening;
+    $('use-usb').disabled = unavailable || !usb?.board?.connected;
     $('usb-listener-status').textContent = !usb ? t('usbListenerOff') : usb.error ? usb.error
       : !usb.listening ? t('usbListenerOff')
       : `${t('usbListening')} TCP ${usb.port} · ${usb.paired_board || ''} · ${usb.board?.connected ? t('usbAuthenticated') : t('usbWaiting')}`;

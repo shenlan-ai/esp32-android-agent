@@ -28,6 +28,8 @@ from .ble import (
 )
 from .config import ConfigStore, PreferencesUpdate, RuntimeSettings
 from .errors import AgentError
+from .firmware import FirmwareManager
+from .firmware_routes import register_firmware_routes
 from .history import EventBus, TraceStore
 from .llm import ModelClient, ModelProtocolError, parse_object
 from .models import Action
@@ -72,7 +74,8 @@ class ListenerSelection(BaseModel):
     enabled: bool
 
 
-def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=ModelClient) -> FastAPI:
+def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=ModelClient,
+               firmware_factory=FirmwareManager) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         runtime = settings or RuntimeSettings.from_env()
@@ -98,6 +101,10 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
         app.state.usb = UsbListener(runtime.usb_host, runtime.usb_port)
         app.state.usb_configure = None
         app.state.usb_management = asyncio.Lock()
+        app.state.firmware = firmware_factory(runtime, app.state.session,
+            lambda: not app.state.usb_management.locked() and not (
+                app.state.usb_configure and not app.state.usb_configure.done()))
+        await app.state.firmware.initialize()
         if app.state.preferences.usb_enabled:
             try:
                 await app.state.usb.start(app.state.preferences.usb_pair_key.get_secret_value(),
@@ -114,6 +121,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
                 await app.state.runner.stop()
             finally:
                 try:
+                    await app.state.firmware.close()
                     if app.state.usb_configure:
                         await asyncio.gather(app.state.usb_configure, return_exceptions=True)
                     await app.state.session.close()
@@ -121,6 +129,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
                     await app.state.usb.close()
 
     app = FastAPI(title="ESP32 Android Agent", version=__version__, lifespan=lifespan)
+    register_firmware_routes(app, lambda: serial_ports())
 
     @app.middleware("http")
     async def access(request: Request, call_next):
@@ -205,7 +214,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
             "adb_available": app.state.adb.available,
             "serial": session.serial,
             "mode": session.controller.mode if session.controller else None,
-            "capabilities": session.controller.capabilities if session.controller else [],
+            "capabilities": session.controller.capabilities if session.controller and not app.state.firmware.busy else [],
             "frame": session.screen.frame.public() if session.screen.frame else None,
             "agent": app.state.runner.public(include_steps=False),
             "board": session.controller.bridge.public()
@@ -213,6 +222,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
             else None,
             "calibrated": calibrated,
             "usb": app.state.usb.public(),
+            "firmware": app.state.firmware.public(),
         }
 
     @app.get("/api/boards")
@@ -367,7 +377,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
         if app.state.model_probe and not app.state.model_probe.done():
             app.state.model_probe.cancel()
             await asyncio.gather(app.state.model_probe, return_exceptions=True)
-        return {"ok": True, **await app.state.runner.stop()}
+        return {"ok": True, **await app.state.runner.stop(), "firmware_in_progress": app.state.firmware.busy}
 
     @app.get("/api/task")
     async def task_snapshot():

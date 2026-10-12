@@ -8,7 +8,7 @@
 
 当前连接板已经实测识别为 **ESP32-D0WD-V3 v3.1、4MB Flash、COM5**。它没有原生USB HID，不能刷参考项目的S3固件。连接、构建与保留原固件步骤见 [BLE 使用说明](docs/BLE-SETUP.md)，验证状态见 [兼容表](docs/COMPATIBILITY.md)。
 
-S3 的 DevKitC-1 N8、XIAO ESP32S3 和 S3 Zero 4MB 固件构建通过；网页写入网络和配对信息，无需改源码。主机连接和配网已模拟验证，S3 实机输入待验收。流程见 [USB 使用说明](docs/USB-SETUP.md)。S3 通用刷写入口仍在开发。
+S3 的 DevKitC-1 N8、XIAO ESP32S3 和 S3 Zero 4MB 固件构建通过；网页提供固件识别、完整备份、确认覆盖和读取校验，再写入网络和配对信息，无需改源码。主机连接、安装向导和配网已模拟验证，S3 实机输入待验收。流程见 [USB 使用说明](docs/USB-SETUP.md)。
 
 ## Windows 便携运行
 
@@ -31,6 +31,8 @@ ADB 不在 PATH 时使用 `--adb <绝对路径>`；端口可通过 `--port` 调�
 确认手动控制正常后，在网页保存视觉模型地址、名称与密钥，点击“测试模型”，再输入自然语言目标。模型测试使用合成图片，任务运行时才上传手机画面到你配置的服务。详细流程、暂停恢复与用量边界见 [自动任务使用说明](docs/AGENT-USAGE.md)。
 
 ## 开发
+
+源码模式的网页安装固件功能需要可选的 `./server[firmware]`，以及构建后由 `scripts/collect_firmware.py --output <新目录>` 生成的镜像目录。启动时传 `--firmware-dir <目录>`；便携包已提供工具和镜像，普通用户无需这些命令。完整流程与备份恢复见 [便携说明](docs/PORTABLE.md)。刷写工具是独立 GPL 进程，应用仍为 MIT，分发包包含各组件许可与来源。
 
 - [开发规范](AGENTS.md) / [agent.md 入口](agent.md)
 - [OpenSpec 流程](docs/DEVELOPMENT.md)

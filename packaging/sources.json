@@ -2,6 +2,15 @@
   "schema": 1,
   "sources": [
     {
+      "name": "esptool",
+      "version": "5.3.0",
+      "repository": "https://github.com/espressif/esptool.git",
+      "tag": "v5.3.0",
+      "commit": "c94e362317498f52bc1b477851a896213341ee92",
+      "paths": ["."],
+      "license": "GPL-2.0-or-later; included stub sources have their own licenses"
+    },
+    {
       "name": "arduino-esp32",
       "version": "2.0.17",
       "repository": "https://github.com/espressif/arduino-esp32.git",

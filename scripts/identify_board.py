@@ -8,28 +8,12 @@ import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
+from android_agent.board_info import parse_chip as parse_chip  # noqa: E402
 
 USB_BRIDGES = re.compile(r"USB\\VID_(?:10C4|1A86|303A|0403)", re.I)
-
-
-def parse_chip(text: str) -> dict:
-    match = re.search(r"(?:Chip is|Chip type:)\s*(ESP32[^\r\n]*)", text, re.I)
-    chip = match.group(1).strip() if match else None
-    size = re.search(r"(?:Detected flash size|Flash size):\s*(\d+)\s*(MB|KB)", text, re.I)
-    chip_upper = chip.upper() if chip else ""
-    if chip_upper.startswith("ESP32-S3"):
-        family, route = "esp32s3", "usb_hid"
-    elif chip_upper.startswith("ESP32-S2"):
-        family, route = "esp32s2", "usb_hid"
-    elif re.match(r"ESP32-(?:C3|C6|H2)\b", chip_upper):
-        family, route = chip.split()[0].lower().replace("-", ""), "ble_hid"
-    elif re.match(r"ESP32(?:\s|$|-D|\(\w)", chip_upper):
-        family, route = "esp32", "ble_hid"
-    else:
-        family, route = None, None
-    return {"chip": chip, "family": family, "flash_size": f"{size.group(1)}{size.group(2).upper()}" if size else None,
-            "native_usb_hid": family in {"esp32s3", "esp32s2"}, "control_route": route,
-            "pcb_model": "not_determined_from_chip_information"}
 
 
 def candidate_ports(devices: dict) -> list[str]:

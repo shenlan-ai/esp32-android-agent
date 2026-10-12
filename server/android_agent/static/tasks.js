@@ -8,18 +8,18 @@ export function createTaskView({ element: $, translate: t, api, headers, guarded
 
   function controls(status) {
     deviceStatus = status;
-    const task = status.agent, active = running.has(task.state), held = active || task.state === 'paused';
+    const task = status.agent, maintenance = status.firmware?.busy, active = running.has(task.state), held = active || task.state === 'paused';
     $('task-state').textContent = t(`state_${task.state}`);
     $('run-task').disabled = !status.serial || !configured || !terminal.has(task.state) || !status.capabilities.length;
     $('pause-task').disabled = !['planning','observing','executing','verifying'].includes(task.state);
-    $('resume-task').disabled = task.state !== 'paused';
+    $('resume-task').disabled = maintenance || task.state !== 'paused';
     $('clear-task').disabled = !task.id || !terminal.has(task.state);
     $('goal').disabled = held;
     $('test-model').disabled = !configured || active || testing;
     if (testing) $('run-task').disabled = true;
     $('export-task').hidden = !task.id;
     for (const id of ['select-device','use-ble','use-adb','save-calibration','probe-x','probe-y']) {
-      if (active) $(id).disabled = true;
+      if (active || maintenance) $(id).disabled = true;
       else if (['select-device','use-ble','use-adb'].includes(id)) $(id).disabled = false;
     }
     for (const form of ['text-form','key-form']) {
@@ -163,6 +163,6 @@ export function createTaskView({ element: $, translate: t, api, headers, guarded
     settings(prefs) { configured = Boolean(prefs.actor.model?.trim()); if (deviceStatus) controls(deviceStatus); },
     status(status) { controls(status); if (current?.revision !== status.agent.revision) guarded(refresh); },
     translated() { signature=''; if (current) render(current); },
-    manualAllowed() { return !running.has(deviceStatus?.agent.state); },
+    manualAllowed() { return !deviceStatus?.firmware?.busy && !running.has(deviceStatus?.agent.state); },
   };
 }

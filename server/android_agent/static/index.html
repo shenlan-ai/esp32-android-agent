@@ -51,6 +51,21 @@
         <details id="board-setup"><summary data-i18n="boardSetup">ESP32 HID 控制</summary>
           <p class="helper" data-i18n="boardHelp">经典 ESP32 插在电脑上，通过蓝牙连接手机。先刷入 BLE 固件，再在手机蓝牙设置中配对 Android Agent BLE。</p>
           <div class="row"><label class="sr-only" for="board-port" data-i18n="boardPort">开发板串口</label><select id="board-port"><option value="">选择开发板串口</option></select><button id="refresh-boards" type="button" data-i18n="refreshBoards">刷新串口</button></div>
+          <details id="firmware-setup"><summary data-i18n="fwSetup">安装或更新开发板固件</summary>
+            <p class="helper" data-i18n="fwIntro">先停止任务并切到 ADB 控制。使用数据线将开发板接到电脑，选择上方串口。识别会复位板子。</p>
+            <p id="fw-availability" class="helper"></p>
+            <ol class="firmware-steps">
+              <li><strong data-i18n="fwIdentifyStep">识别开发板</strong><button id="fw-identify" type="button" data-i18n="fwIdentify" disabled>识别开发板</button><p id="fw-identity" class="helper"></p></li>
+              <li><label for="fw-profile" data-i18n="fwProfileStep">选择匹配固件</label><select id="fw-profile" disabled><option value="">请选择固件配置</option></select><p class="helper" data-i18n="fwProfileHelp">只显示匹配芯片和容量的配置。S3 8MB 需按板子上的型号选择；芯片信息无法确认商品板型。</p></li>
+              <li><strong data-i18n="fwBackupStep">完整备份当前程序</strong><button id="fw-backup" type="button" data-i18n="fwBackup" disabled>备份当前程序</button><p id="fw-backup-info" class="firmware-digest"></p><button id="fw-download" type="button" data-i18n="fwDownload" hidden>下载完整备份</button><p class="helper" data-i18n="fwBackupPrivacy">备份保存在本机，可能包含原程序的密钥和网络配置，请勿公开上传。</p></li>
+              <li><strong data-i18n="fwWriteStep">确认覆盖并校验</strong><label class="checkbox firmware-consent"><input id="fw-confirm" type="checkbox" disabled><span data-i18n="fwOverwrite">我确认覆盖上述开发板的现有程序，已保存完整备份</span></label><button id="fw-write" type="button" class="firmware-write" data-i18n="fwWrite" disabled>写入并校验</button></li>
+            </ol>
+            <p id="fw-status" role="status"></p><p id="fw-error" class="firmware-error" role="alert"></p>
+            <p id="fw-writing-note" class="helper" data-i18n="fwWritingHelp" hidden>保持 USB 连接。写入和校验不可取消；关闭网页或按 Esc 不会停止固件操作。失败后保留备份，不会自动重试。</p>
+            <p id="fw-success" class="helper" data-i18n="fwSuccess" hidden>镜像写入和读取校验完成。手机输入尚未验证：经典 ESP32 继续蓝牙配对，S3 继续配网，再进行手动控制验收。</p>
+            <button id="fw-cancel" type="button" data-i18n="fwCancel" hidden>取消读取</button>
+            <details><summary data-i18n="fwHistory">历史完整备份</summary><ul id="fw-history" class="service-list firmware-history"></ul></details>
+          </details>
           <details id="usb-setup"><summary data-i18n="usbSetup">ESP32-S3 原生 USB 配网</summary>
             <p class="helper" data-i18n="usbHelp">先将已刷 USB 固件的 S3 原生 USB 口接到电脑，选择上方串口并写入配网。手机需要无线 ADB；配网后将板子接到手机的 OTG 口。S3 不使用 BLE 配对。</p>
             <form id="usb-form">

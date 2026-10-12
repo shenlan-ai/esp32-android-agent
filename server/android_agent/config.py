@@ -107,6 +107,8 @@ class RuntimeSettings(BaseModel):
     preview_interval: float = 0.8
     usb_host: str = "0.0.0.0"
     usb_port: int = Field(8891, ge=1, le=65535)
+    firmware_dir: Path | None = None
+    firmware_tool: Path | None = None
 
     @property
     def local_only(self) -> bool:
@@ -122,6 +124,8 @@ class RuntimeSettings(BaseModel):
             "access_token": os.getenv("ANDROID_AGENT_ACCESS_TOKEN", ""),
             "usb_host": os.getenv("ANDROID_AGENT_USB_HOST", "0.0.0.0"),
             "usb_port": int(os.getenv("ANDROID_AGENT_USB_PORT", "8891")),
+            "firmware_dir": os.getenv("ANDROID_AGENT_FIRMWARE_DIR"),
+            "firmware_tool": os.getenv("ANDROID_AGENT_FIRMWARE_TOOL"),
         }
         settings = cls(**values)
         settings.check_access()

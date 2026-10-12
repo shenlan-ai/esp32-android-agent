@@ -13,6 +13,8 @@
 
 ## 构建与保留原固件
 
+普通用户可以使用 [Windows 便携包的网页向导](PORTABLE.md)：展开“ESP32 HID 控制 → 安装或更新开发板固件”，选择串口并识别，经典 ESP32 4MB 选择 `esp32dev`，完整备份并下载后确认覆盖、写入并校验。向导会重新核对同一板子的 MAC、芯片和容量；失败不自动重试。便携包提供刷写工具，无需用户安装 Python/Arduino。源码运行需要 `server[firmware]` 和 `--firmware-dir`，见开发说明。
+
 贡献者在项目根执行（Windows虚拟环境）：
 
 ```text

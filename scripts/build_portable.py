@@ -19,7 +19,7 @@ from packaging.requirements import Requirement
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ("fastapi", "uvicorn", "httpx", "pillow", "pydantic", "pyserial")
-SOURCE_ROOTS = {"server", "hardware", "scripts", "packaging", "docs", "openspec", ".github"}
+SOURCE_ROOTS = {"server", "hardware", "scripts", "packaging", "docs", "openspec", ".github", "tools"}
 SOURCE_FILES = {"README.md", "README.en.md", "LICENSE", "NOTICE", "AGENTS.md", "agent.md",
                 "CONTRIBUTING.md", ".env.example", ".gitignore"}
 
@@ -196,6 +196,34 @@ def inventory(folder: Path) -> dict:
     return result
 
 
+def build_firmware_tool(output: Path, folder: Path, cache: Path) -> dict:
+    if metadata.version("esptool") != "5.3.0":
+        raise ValueError("Install ./server[firmware] with esptool 5.3.0")
+    destination = folder / "tools"
+    destination.mkdir()
+    args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--onedir", "--console",
+            "--name", "firmware-tool", "--distpath", str(destination),
+            "--workpath", str(output / "tool-build"), "--specpath", str(output / "tool-build"),
+            "--paths", str(ROOT / "server"), "--collect-all", "esptool",
+            "--exclude-module", "pytest", "--exclude-module", "IPython",
+            "--exclude-module", "tkinter", str(ROOT / "tools/firmware_worker.py")]
+    names = dependency_closure(("esptool",))
+    for name in names:
+        args += ["--copy-metadata", name]
+    subprocess.run(args, cwd=ROOT, check=True, timeout=900)
+    names = sorted(set(names) | set(bundled_distributions(output / "tool-build/firmware-tool/Analysis-00.toc")), key=str.lower)
+    names = [name for name in names if name.lower() not in {"pyinstaller", "esp32-android-agent"}]
+    tool = destination / "firmware-tool"
+    shutil.copyfile(ROOT / "tools/LICENSE", tool / "LICENSE")
+    deps = collect_licenses(tool / "licenses", names, cache)
+    (tool / "requirements-installed.txt").write_text(
+        "\n".join(f"{name}=={metadata.version(name)}" for name in names) + "\n", encoding="utf-8")
+    return {"protocol": "android-agent-firmware-v1", "esptool": "5.3.0", "license": "GPL-2.0-or-later",
+            "executable": "tools/firmware-tool/firmware-tool.exe", "dependencies": deps,
+            "wrapper_sources": "sources/project.zip (tools/ and shared server/android_agent modules)",
+            "esptool_sources": "sources/esptool-5.3.0-sources.tar"}
+
+
 def build(output: Path, cache: Path, framework: Path) -> Path:
     if sys.platform != "win32" or platform.machine().lower() not in {"amd64", "x86_64"}:
         raise ValueError("Build the portable application on Windows x64")
@@ -218,7 +246,8 @@ def build(output: Path, cache: Path, framework: Path) -> Path:
         args += ["--copy-metadata", name]
     for module in ("pytest", "_pytest", "IPython", "tkinter", "numpy", "matplotlib", "setuptools", "ruff", "PyInstaller",
                    "rich", "pygments", "wsproto", "websockets", "watchfiles", "gunicorn",
-                   "uvloop", "httptools", "trio", "orjson", "ujson", "brotli", "zstandard", "socksio", "yaml"):
+                   "uvloop", "httptools", "trio", "orjson", "ujson", "brotli", "zstandard", "socksio", "yaml",
+                   "esptool", "espefuse", "espsecure", "esp_rfc2217_server", "intelhex", "reedsolo"):
         args += ["--exclude-module", module]
     # Dynamic backends are explicitly selected by launcher.py.
     args += ["--hidden-import", "uvicorn.logging", "--hidden-import", "uvicorn.loops.asyncio",
@@ -228,7 +257,9 @@ def build(output: Path, cache: Path, framework: Path) -> Path:
     names = sorted(set(names) | set(bundled_distributions(output / "build/esp32-android-agent/Analysis-00.toc")),
                    key=str.lower)
     # PyInstaller's runtime hooks are covered separately; it is not an app dependency.
-    names = [name for name in names if name.lower() != "pyinstaller"]
+    names = [name for name in names if name.lower() not in {"pyinstaller", "esp32-android-agent"}]
+    if any(name.lower() in {"esptool", "reedsolo", "intelhex"} for name in names):
+        raise ValueError("Firmware tool leaked into the main application process")
     folder = output / "esp32-android-agent"
     for filename in ("LICENSE", "NOTICE"):
         shutil.copyfile(ROOT / filename, folder / filename)
@@ -238,13 +269,14 @@ def build(output: Path, cache: Path, framework: Path) -> Path:
     source_archive(ROOT, sources / "project.zip")
     upstream = collect_upstream(cache, sources)
     deps = collect_licenses(folder / "licenses", names, cache)
+    tool = build_firmware_tool(output, folder, cache)
     collect_relink(ROOT, sources / "firmware-relink.zip")
     firmware = collect(ROOT, framework, folder / "firmware")
     release = {"schema": 1, "version": metadata.version("esp32-android-agent"),
                "git_revision": command("git", "rev-parse", "HEAD"),
                "dirty": bool(command("git", "status", "--porcelain")),
                "python": platform.python_version(), "python_source": "https://www.python.org/downloads/source/",
-               "platform": platform.platform(), "dependencies": deps, "firmware": firmware,
+               "platform": platform.platform(), "dependencies": deps, "firmware": firmware, "firmware_tool": tool,
                "upstream_sources": upstream, "adb_bundled": False,
                "adb_source": "https://developer.android.com/tools/releases/platform-tools",
                "validation": "Built firmware and offline app; Android/S3 real input pending"}

@@ -37,6 +37,14 @@ def smoke(executable: Path) -> dict:
     environment["PATH"] = str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32")
     environment["PYTHONNOUSERSITE"] = "1"
     environment["PYTHONUTF8"] = "1"
+    tool = executable.parent / "tools/firmware-tool/firmware-tool.exe"
+    diagnosis = subprocess.run([str(tool), "diagnose"], env=environment,
+                               cwd=executable.parent, capture_output=True, text=True,
+                               encoding="utf-8", timeout=30, check=True)
+    firmware_tool = json.loads(diagnosis.stdout)
+    if (firmware_tool.get("protocol") != "android-agent-firmware-v1" or firmware_tool.get("ok") is not True
+            or firmware_tool.get("esptool") != "5.3.0" or firmware_tool.get("device_used") is not False):
+        raise ValueError("Isolated firmware tool diagnosis failed")
     with tempfile.TemporaryDirectory(prefix="android-agent-smoke-") as temporary:
         data = Path(temporary) / "用户 data"
         missing = Path(temporary) / "missing-adb.exe"
@@ -70,10 +78,17 @@ def smoke(executable: Path) -> dict:
                 if status["adb_available"]:
                     raise ValueError("Smoke accidentally found a real ADB")
                 for path, expected in (("/", b"<!doctype html>"), ("/static/app.js", b"import"),
-                                       ("/static/style.css", b"{"), ("/static/i18n.js", b"export")):
+                                       ("/static/style.css", b"{"), ("/static/i18n.js", b"export"),
+                                       ("/static/firmware.js", b"createFirmwareSetup")):
                     with http.open(url + path, timeout=5) as response:
                         if response.status != 200 or expected not in response.read():
                             raise ValueError(f"Missing portable web content: {path}")
+                with http.open(url + "/api/firmware", timeout=5) as response:
+                    fw = json.load(response)
+                if (not fw["tool_available"] or not fw["catalog"]["available"] or fw["busy"]
+                        or {item["profile"] for item in fw["catalog"]["profiles"]} != {
+                            "esp32dev", "esp32_s3_devkitc", "xiao_esp32s3", "esp32_s3_zero"}):
+                    raise ValueError("Portable firmware catalog or tool unavailable")
                 try:
                     http.open(url + "/api/devices", timeout=5)
                     raise ValueError("Missing ADB should produce an actionable device error")
@@ -97,6 +112,7 @@ def smoke(executable: Path) -> dict:
         return {"portable": True, "version": report["version"], "inventory": "passed",
                 "diagnostics": "passed", "static_and_api": "passed", "missing_adb": "passed",
                 "port_conflict": "passed", "system_python_and_adb": "excluded",
+                "firmware_tool_diagnose": "passed", "firmware_catalog": "four profiles",
                 "phone_or_board_used": False}
 
 

@@ -45,6 +45,19 @@ Node 仅用于贡献者测试网页坐标计算，用户运行服务不依赖 No
 
 Windows便携包构建与真实子进程验收见 [便携包说明](PORTABLE.md)。`server[build]` 固定 PyInstaller6.16.0；产物含实际运行依赖版本、许可、项目与第三方源码及四板固件。构建不发布、不刷设备，ADB由用户从官方单独安装。
 
+网页固件向导的源码入口（先完成四板构建）：
+
+```text
+python -m pip install -e "./server[dev,firmware]"
+python scripts/collect_firmware.py --output .runtime-local/firmware-catalog
+python -m android_agent --firmware-dir .runtime-local/firmware-catalog
+python tools/firmware_worker.py diagnose
+python -m pytest server/tests/test_firmware.py -q
+python server/tests/firmware_demo.py --port 8892
+```
+
+catalog 输出目录必须是新目录。缺可选工具/镜像时工作台仍可运行，向导显示安装说明。`--firmware-tool` / `ANDROID_AGENT_FIRMWARE_TOOL` 可以指向兼容协议的独立工具，`ANDROID_AGENT_FIRMWARE_DIR` 设置镜像目录。DEMO 使用临时目录和 memory-backed ROM，不打开真实串口、ADB 或模型；提供正常和断线两个模拟端口，结束时关闭进程。新增测试用真实 manager/worker 配合假 ROM，另用真实子进程验证超时/取消清理。独立工具 `tools/` 使用 GPL-2.0-or-later；应用只通过 JSON 子进程协议交互。便携构建检查主程序没有捆入 esptool、同时记录独立工具全部依赖、许可和对应源码；重建需同时安装 `server[build,firmware]`，从两份 `requirements-installed.txt` 恢复实际版本。
+
 ## 持续检查
 
 `.github/workflows/ci.yml` 在push、PR和手动运行时检查OpenSpec正式/归档规格与修改范围，运行Ubuntu/Windows × Python3.10/3.12测试、Node22坐标测试以及四个固件编译。Actions锁定官方commit，仓库权限只读，不使用手机、开发板、模型密钥或付费服务。

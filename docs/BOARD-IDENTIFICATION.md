@@ -29,3 +29,5 @@ python scripts/identify_board.py --port COM3
 识别调用 esptool 的 chip-id 和 flash-id；可能短暂复位设备，不执行擦除或写入 Flash。
 
 ESP32-S3/S2 支持原生 USB HID；经典 ESP32 需要蓝牙 HID。C3/C6 的 USB Serial/JTAG 不等于可编程 USB HID。具体商品板型需要额外可靠资料，芯片信息只用于选择构建目标。
+
+网页安装向导使用独立固定 esptool 5.3.0 工具读取芯片、硬件 MAC 和 Flash，识别阶段不加载 stub、不写 Flash，但会复位设备。备份和写入各自在单次 ROM 连接内核对预期身份，设备被替换会拒绝，不按旧 COM 口自动重放。只显示匹配芯片与容量的已支持配置；S3 8MB 的两种商品板型须手动选择，未知容量/未支持系列不能进入写入。网页仅显示 MAC 后三字节，完整备份身份记录留在本机。当前 COM5 的既有实测证据来自上述 5.5.0 工具，新增网页流程的模拟通过不能代替实物刷写或手机验收。

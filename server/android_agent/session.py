@@ -22,15 +22,23 @@ class DeviceSession:
         self._stopping = False
         self._agent_owner = None
         self._agent_running = False
+        self._maintenance: str | None = None
+
+    def _guard_maintenance(self) -> None:
+        if self._maintenance is not None:
+            raise DeviceError("Wait for firmware maintenance to finish before device control")
 
     def guard_manual(self) -> None:
+        self._guard_maintenance()
         if self._agent_owner is not None and self._agent_running:
             raise DeviceError("Pause the task and wait for input release before manual control")
 
     async def reserve(self, owner) -> None:
+        self._guard_maintenance()
         if self._agent_owner is not None or self._lock.locked() or self._stopping:
             raise DeviceError("Stop the current operation or task before starting another task")
         async with self._lock:
+            self._guard_maintenance()
             if not self.controller or not self.controller.capabilities:
                 raise DeviceError("Connect the phone and an available controller first")
             self._agent_owner, self._agent_running = owner, True
@@ -40,6 +48,7 @@ class DeviceSession:
             self._agent_running = False
 
     def activate(self, owner) -> None:
+        self._guard_maintenance()
         if self._agent_owner is not owner or self._lock.locked() or self._stopping:
             raise DeviceError("Wait for manual input to finish before resuming")
         self._agent_running = True
@@ -152,6 +161,7 @@ class DeviceSession:
                        owner=None, reference: Frame | None = None,
                        on_submit=None) -> tuple[dict, Frame]:
         def guard():
+            self._guard_maintenance()
             if owner is None:
                 self.guard_manual()
             elif self._agent_owner is not owner or not self._agent_running:

@@ -4,7 +4,7 @@
 
 ## 解压与启动
 
-1. 解压整个 ZIP，保留 `esp32-android-agent.exe` 旁的 `_internal`、`licenses`、`sources`、`firmware` 等目录。
+1. 解压整个 ZIP，保留 `esp32-android-agent.exe` 旁的 `_internal`、`licenses`、`sources`、`firmware`、`tools` 等目录。
 2. 从 [Google 官方页面](https://developer.android.com/tools/releases/platform-tools) 下载 Windows Platform Tools，阅读并接受其许可后解压，将完整 `platform-tools` 文件夹放在 exe 旁。ADB **没有随项目便携包再分发**；不要只复制 adb.exe，它还需要 DLL。
 3. 双击 `esp32-android-agent.exe`。控制台会显示数据路径和本机地址，服务启动成功后打开浏览器。首次没有 ADB 也能查看工作台；补充工具后重启程序。
 4. 手机开启开发者选项和 USB 调试，连接电脑，在手机上授权；网页选择设备。在 ADB 体验模式验证画面与手动控制，无需模型密钥。自动任务配置见包内 `sources/project.zip` 中的 `docs/AGENT-USAGE.md`。
@@ -22,7 +22,13 @@ ADB 选择顺序：`--adb`、`ADB_PATH`、exe 旁 `platform-tools/adb.exe`、PAT
 
 ## 固件与来源
 
-`firmware/manifest.json` 记录经典 ESP32 4MB BLE、S3 DevKitC-1 N8、XIAO ESP32S3、S3 Zero 4MB 的芯片、Flash、分区和镜像 SHA256。串口芯片识别不能确定商品 PCB 名称。经典 ESP32 不支持原生 USB HID，不能刷 S3 镜像。此版本包还没有网页刷写向导；经典板用包内源码 `scripts/flash_board.py` 配合 Python/esptool，S3 通用刷写入口另行开发。**运行或解压便携包不会刷写设备。**
+`firmware/manifest.json` 记录经典 ESP32 4MB BLE、S3 DevKitC-1 N8、XIAO ESP32S3、S3 Zero 4MB 的芯片、Flash、分区和镜像 SHA256。串口芯片识别不能确定商品 PCB 名称。经典 ESP32 不支持原生 USB HID，不能刷 S3 镜像。**运行或解压便携包不会刷写设备。**
+
+网页展开“ESP32 HID 控制 → 安装或更新开发板固件”，先停止任务、切到 ADB 控制，再选择电脑串口。按顺序识别、选择匹配配置、完整备份并下载、勾选覆盖确认、写入并校验。确认限时 5 分钟且只使用一次；过期或失败后需重新识别、备份，不自动重试。S3 8MB 必须按实物标记选择 DevKitC 或 XIAO，未支持容量不会开放写入。识别会复位板子；不加载 RAM stub，不写 Flash。
+
+原 Flash 备份在用户数据目录的 `firmware-backups` 中，带 SHA256 和元数据；可能包含原程序的密钥，应保留且不要公开上传。写入期间保持 USB 和供电，手机 Esc/停止及网页关闭均不会取消写入；Ctrl+C 优雅关闭会等待它结束。强制结束进程或拔线可能使板子无法启动，完整备份可在核实同一设备和容量后用 esptool 从地址 `0x0` 恢复；恢复也是一次覆盖操作，网页不会自动恢复。校验成功只证明镜像，手机输入需继续 BLE 配对或 S3 配网并手动验收。
+
+`tools/firmware-tool/firmware-tool.exe` 是使用固定 esptool 5.3.0 的独立 **GPL-2.0-or-later** 工具进程，主应用不导入 esptool。工具目录含自身 GPL 许可、实际依赖许可与版本；完整 esptool 对应源码在 `sources/esptool-5.3.0-sources.tar`，包装器及共享模块源码在 `sources/project.zip`。主应用的 MIT 许可不覆盖此独立工具；整个分发包包含多种许可。
 
 `release.json`、`requirements-installed.txt` 和 `checksums.json` 提供实际运行依赖、构建版本和全部产物校验；`licenses` 包含依赖和 Python 许可。应用自身 MIT 不代表依赖全部 MIT。PyInstaller GPL 有生成程序的许可例外，Arduino core 使用 LGPL 及组件各自许可。
 
@@ -33,7 +39,7 @@ ADB 选择顺序：`--adb`、`ADB_PATH`、exe 旁 `platform-tools/adb.exe`、PAT
 在 Windows x64、Python 3.10–3.14 的源码检出中：
 
 ```text
-python -m pip install -e "./server[dev,build]"
+python -m pip install -e "./server[dev,build,firmware]"
 python -m pip install platformio==6.1.19
 python -m platformio run -d hardware/ble_bridge
 python -m platformio run -d hardware/usb_bridge
@@ -49,6 +55,6 @@ python scripts/build_portable.py --output dist/windows-0.1.0
 python scripts/smoke_portable.py "D:\便携验收\esp32-android-agent\esp32-android-agent.exe"
 ```
 
-smoke 对照完整 `checksums.json`，然后移除系统 Python/ADB 路径，用隔离目录启动真实 exe；验证页面、静态资源、API、缺 ADB 错误及第二进程端口冲突，结束后关闭测试进程。应在添加 Platform Tools 前运行，因为额外文件会被检查拒绝。此过程不调用模型、串口或真实手机，也不能替代实机任务验收。
+smoke 对照完整 `checksums.json`，然后移除系统 Python/ADB 路径，用隔离目录启动真实 exe；验证独立工具 diagnose、四板目录、页面、静态资源、API、缺 ADB 错误及第二进程端口冲突，结束后关闭测试进程。应在添加 Platform Tools 前运行，因为额外文件会被检查拒绝。此过程不调用模型、串口或真实手机，也不能替代实机任务验收。
 
 GitHub中的 `Build Windows portable artifact` 工作流可手动触发以上构建与解压验收，通过后保留ZIP和SHA的artifact 7天，不发布Release。该配置已在本机通过语法和等效命令检查，首次远程运行仍待验证；不会因存在此workflow就自动生成正式版本。
