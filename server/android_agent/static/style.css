@@ -55,6 +55,12 @@ legend { font-weight:600; font-size:14px; }
 .steps .error { color:var(--alarm); }
 .step-image { display:block; max-height:260px; max-width:100%; margin-top:8px; cursor:zoom-in; }
 #plan-text { white-space:pre-wrap; }
+.step-images { display:flex; flex-wrap:wrap; gap:12px; }
+.step-images figure { margin:6px 0; max-width:45%; }
+.step-images figcaption { color:var(--muted); font-size:12px; }
+#history-list li { display:flex; flex-wrap:wrap; gap:8px; }
+#history-list button:first-child { white-space:normal; text-align:left; }
+#task-reason { white-space:pre-wrap; }
 footer { max-width:1360px; margin:0 auto; padding:0 24px 24px; display:flex; justify-content:space-between; gap:16px; color:var(--muted); font-size:12px; }
 .access { max-width:600px; margin:24px auto; display:flex; gap:10px; align-items:center; padding:20px; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }

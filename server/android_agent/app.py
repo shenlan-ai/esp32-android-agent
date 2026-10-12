@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import io
+import json
 import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -7,12 +10,14 @@ from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from . import __version__
 from .adb import AdbClient
+from .agent import RUNNING_STATES, TaskRunner
 from .ble import (
     BleController,
     BridgeSelection,
@@ -23,6 +28,8 @@ from .ble import (
 )
 from .config import ConfigStore, PreferencesUpdate, RuntimeSettings
 from .errors import AgentError
+from .history import EventBus, TraceStore
+from .llm import ModelClient, ModelProtocolError, parse_object
 from .models import Action
 from .screen import AdbScreen
 from .session import DeviceSession
@@ -53,7 +60,12 @@ class Pair(Address):
     code: str = Field(pattern=r"^\d{6}$")
 
 
-def create_app(settings: RuntimeSettings | None = None, adb=None) -> FastAPI:
+class Goal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    goal: str = Field(min_length=1, max_length=2000)
+
+
+def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=ModelClient) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         runtime = settings or RuntimeSettings.from_env()
@@ -71,8 +83,21 @@ def create_app(settings: RuntimeSettings | None = None, adb=None) -> FastAPI:
                 await app.state.session.select(app.state.preferences.serial)
             except AgentError:
                 pass
-        yield
-        await app.state.session.close()
+        app.state.events = EventBus()
+        app.state.traces = TraceStore(runtime.data_dir)
+        app.state.runner = TaskRunner(app.state.session, app.state.traces, app.state.events,
+                                      model_factory, runtime.access_token.get_secret_value())
+        app.state.model_probe = None
+        try:
+            yield
+        finally:
+            try:
+                if app.state.model_probe and not app.state.model_probe.done():
+                    app.state.model_probe.cancel()
+                    await asyncio.gather(app.state.model_probe, return_exceptions=True)
+                await app.state.runner.stop()
+            finally:
+                await app.state.session.close()
 
     app = FastAPI(title="ESP32 Android Agent", version=__version__, lifespan=lifespan)
 
@@ -104,7 +129,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None) -> FastAPI:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "same-origin"
-        if request.url.path == "/" or request.url.path.startswith("/static/"):
+        if request.url.path == "/" or request.url.path.startswith(("/static/", "/api/")):
             response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; connect-src 'self'"
@@ -161,7 +186,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None) -> FastAPI:
             "mode": session.controller.mode if session.controller else None,
             "capabilities": session.controller.capabilities if session.controller else [],
             "frame": session.screen.frame.public() if session.screen.frame else None,
-            "agent": {"available": False, "state": "idle", "steps": []},
+            "agent": app.state.runner.public(include_steps=False),
             "board": session.controller.bridge.public()
             if isinstance(session.controller, BleController)
             else None,
@@ -240,7 +265,105 @@ def create_app(settings: RuntimeSettings | None = None, adb=None) -> FastAPI:
 
     @app.post("/api/stop")
     async def stop():
-        return {"ok": True, **await app.state.session.stop()}
+        if app.state.model_probe and not app.state.model_probe.done():
+            app.state.model_probe.cancel()
+            await asyncio.gather(app.state.model_probe, return_exceptions=True)
+        return {"ok": True, **await app.state.runner.stop()}
+
+    @app.get("/api/task")
+    async def task_snapshot():
+        return app.state.runner.public()
+
+    @app.post("/api/task/start")
+    async def start_task(payload: Goal):
+        if app.state.model_probe and not app.state.model_probe.done():
+            raise AgentError("Wait for the model test to finish before starting a task")
+        return await app.state.runner.start(payload.goal, app.state.preferences)
+
+    @app.post("/api/task/pause")
+    async def pause_task():
+        return await app.state.runner.pause()
+
+    @app.post("/api/task/resume")
+    async def resume_task():
+        return await app.state.runner.resume(app.state.preferences)
+
+    @app.post("/api/task/clear")
+    async def clear_task():
+        return await app.state.runner.clear()
+
+    @app.get("/api/task/steps/{index}/{phase}.jpg")
+    async def step_image(index: int, phase: str):
+        if phase not in {"before", "after"}:
+            raise ValueError("Choose before or after step image")
+        data = app.state.runner.images.get((index, phase))
+        if data is None:
+            raise AgentError("Step image expired or unavailable; check exported history if saved")
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/history")
+    async def task_history():
+        return {"tasks": await app.state.traces.list()}
+
+    @app.get("/api/history/{task_id}")
+    async def history_snapshot(task_id: str):
+        return await app.state.traces.read(task_id)
+
+    @app.get("/api/history/{task_id}/export.zip")
+    async def export_history(task_id: str):
+        data = await app.state.traces.export(task_id)
+        return Response(data, media_type="application/zip",
+                        headers={"Content-Disposition": f'attachment; filename="task-{task_id}.zip"',
+                                 "Cache-Control": "no-store"})
+
+    @app.get("/api/events")
+    async def events(request: Request):
+        if len(app.state.events.queues) >= 32:
+            raise AgentError("Too many event subscribers; close unused browser tabs")
+
+        async def stream():
+            async with app.state.events.subscribe() as queue:
+                yield 'event: reset\ndata: {}\n\n'
+                while not await request.is_disconnected():
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=15)
+                        yield f"event: {event['event']}\ndata: {json.dumps(event)}\n\n"
+                    except TimeoutError:
+                        yield ': heartbeat\n\n'
+        return StreamingResponse(stream(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.post("/api/models/test")
+    async def test_model():
+        if app.state.runner.state in RUNNING_STATES:
+            raise AgentError("Pause or finish the task before testing a model")
+        if app.state.model_probe and not app.state.model_probe.done():
+            raise AgentError("A model test is already running")
+
+        async def probe():
+            stream = io.BytesIO()
+            Image.new("RGB", (64, 64), "#008000").save(stream, "JPEG")
+            client = model_factory(app.state.preferences.actor)
+            try:
+                reply = await client.chat('Return only JSON {"color":"dominant color in English"}.',
+                                          "What is the dominant color of this synthetic square?", [stream.getvalue()])
+                result = parse_object(reply.text)
+                if str(result.get("color", "")).lower() != "green":
+                    raise ModelProtocolError("Endpoint responded but did not identify the synthetic image")
+                return {"ok": True, "seconds": round(reply.seconds, 3),
+                        "tokens": reply.usage.total_tokens, "estimated": reply.usage.estimated,
+                        "phone_image_sent": False}
+            finally:
+                await client.close()
+        pending = asyncio.create_task(probe(), name="model-connectivity-probe")
+        app.state.model_probe = pending
+        try:
+            return await pending
+        except asyncio.CancelledError as exc:
+            raise AgentError("Model test cancelled; no phone input was sent") from exc
+        finally:
+            if app.state.model_probe is pending:
+                app.state.model_probe = None
 
     @app.get("/api/settings")
     async def get_settings():

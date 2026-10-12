@@ -1,5 +1,6 @@
 import { screenPoint } from './geometry.js';
 import { messages } from './i18n.js';
+import { createTaskView } from './tasks.js';
 
 const $ = id => document.getElementById(id);
 let language = 'zh', token = '', csrf = '', status = null, frameId = null, blobUrl = '';
@@ -31,6 +32,7 @@ async function api(path, body) {
   return data;
 }
 async function guarded(work) { try { return await work(); } catch (error) { message(error.message); return null; } }
+const tasks = createTaskView({element:$,translate:t,api,headers,guarded,message});
 async function refreshDevices() {
   const data = await api('/api/devices');
   $('device-select').replaceChildren(new Option(t('chooseDevice'), ''), ...data.devices.map(device => {
@@ -48,10 +50,12 @@ async function refreshBoards() {
 }
 async function loadSettings() {
   const prefs = await api('/api/settings');
+  tasks.settings(prefs);
   displayCalibration(prefs);
   for (const role of ['actor', 'planner']) {
     $(`${role}-base`).value = prefs[role].base_url;
     $(`${role}-model`).value = prefs[role].model;
+    $(`${role}-extra`).value = Object.keys(prefs[role].extra_body).length ? JSON.stringify(prefs[role].extra_body,null,2) : '';
     $(`${role}-key-status`).textContent = t(prefs[role].api_key_set ? 'keySaved' : 'keyMissing');
     $(`${role}-key-status`).dataset.keySet = String(prefs[role].api_key_set);
   }
@@ -67,6 +71,8 @@ async function saveSettings() {
   const body = { max_steps: Number($('max-steps').value), max_seconds: Number($('max-seconds').value), max_total_tokens: Number($('max-tokens').value), save_screenshots: $('save-screenshots').checked };
   for (const role of ['actor', 'planner']) {
     body[role] = { base_url: $(`${role}-base`).value, model: $(`${role}-model`).value, clear_api_key: $(`${role}-clear-key`).checked };
+    try { body[role].extra_body = JSON.parse($(`${role}-extra`).value.trim() || '{}'); }
+    catch { throw new Error(t('extraInvalid')); }
     if ($(`${role}-key`).value) body[role].api_key = $(`${role}-key`).value;
   }
   await api('/api/settings', body);
@@ -100,12 +106,12 @@ async function poll() {
       status = await api('/api/status');
       $('connection-state').textContent = t('connected');
       $('mode-label').textContent = status.serial ? `${status.mode.toUpperCase()} · ${status.serial}` : t('noSelection');
-      $('task-state').textContent = status.agent.state === 'idle' ? t('idle') : status.agent.state;
       const board = status.board;
       $('board-status').textContent = !board ? t('boardInactive') : !board.connected ? `${t('boardDisconnected')} ${board.error || ''}`
         : !board.ble_connected ? t('boardPairNeeded') : !status.calibrated ? t('boardCalibrateNeeded') : t('boardReady');
       for (const id of ['probe-x','probe-y','save-calibration']) $(id).disabled = !(board?.connected && board.ble_connected && status.serial);
       document.querySelectorAll('[data-action]').forEach(button => { button.disabled = !status.capabilities.includes(button.dataset.action); });
+      tasks.status(status);
     }
   } catch (error) { $('connection-state').textContent = error.message; }
   setTimeout(poll, 1000);
@@ -116,6 +122,7 @@ async function initialize() {
   status = await api('/api/status'); await loadSettings();
   await guarded(refreshDevices);
   await guarded(refreshBoards);
+  await tasks.refresh(); tasks.events();
 }
 async function sendAction(action) {
   if (status && !status.capabilities.includes(action.action)) throw new Error(t('actionUnavailable'));
@@ -126,7 +133,7 @@ const live = $('live');
 const point = e => screenPoint(e.clientX, e.clientY, live.getBoundingClientRect(), live.naturalWidth, live.naturalHeight);
 let down = null;
 live.addEventListener('pointerdown', event => {
-  if (!frameId || event.button !== 0) return;
+  if (!frameId || event.button !== 0 || !tasks.manualAllowed()) return;
   const position = point(event); if (!position) return;
   down = { ...position, time: performance.now(), frameId };
   live.setPointerCapture(event.pointerId); event.preventDefault();
@@ -135,7 +142,7 @@ live.addEventListener('pointerup', event => {
   if (!down) return;
   const from = down, to = point(event); down = null;
   if (live.hasPointerCapture(event.pointerId)) live.releasePointerCapture(event.pointerId);
-  if (!to) return;
+  if (!to || !tasks.manualAllowed()) return;
   const duration = Math.round(performance.now() - from.time), distance = Math.hypot(to.x - from.x, to.y - from.y);
   const action = distance > 20 ? { action:'swipe', x1:from.x, y1:from.y, x2:to.x, y2:to.y, duration_ms:Math.min(5000, Math.max(100, duration)) }
     : duration >= 600 ? { action:'long_press', x:from.x, y:from.y, duration_ms:Math.min(5000,duration) } : { action:'tap', x:from.x, y:from.y };
@@ -147,7 +154,7 @@ live.addEventListener('lostpointercapture', () => { down = null; });
 let wheelTime = 0;
 live.addEventListener('wheel', event => {
   event.preventDefault();
-  if (!frameId || performance.now() - wheelTime < 350) return;
+  if (!frameId || !tasks.manualAllowed() || performance.now() - wheelTime < 350) return;
   const position = point(event); if (!position) return;
   wheelTime = performance.now(); guarded(() => sendAction({ action:'scroll', ...position, lines:event.deltaY > 0 ? -3 : 3 }));
 }, { passive:false });
@@ -193,6 +200,6 @@ $('settings-form').addEventListener('submit', event => { event.preventDefault();
 async function stop() { const result = await api('/api/stop', {}); message(t('stopped') + result.release, true); }
 $('emergency-stop').addEventListener('click', () => guarded(stop));
 document.addEventListener('keydown', event => { if (event.key === 'Escape') guarded(stop); });
-$('language').addEventListener('click', () => { language = language === 'zh' ? 'en' : 'zh'; try { localStorage.setItem('language',language); } catch { /* optional */ } translate(); });
+$('language').addEventListener('click', () => { language = language === 'zh' ? 'en' : 'zh'; try { localStorage.setItem('language',language); } catch { /* optional */ } translate(); tasks.translated(); });
 $('access-login').addEventListener('click', () => guarded(async () => { token = $('access-token').value; try { sessionStorage.setItem('access-token',token); } catch { /* optional */ } await initialize(); }));
 translate(); guarded(initialize); poll(); refreshFrame();

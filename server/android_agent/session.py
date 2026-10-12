@@ -6,7 +6,7 @@ from .ble import BleController, Calibration, PointerProbe, SerialBridge
 from .controller import AdbController
 from .errors import DeviceError
 from .models import Action
-from .screen import AdbScreen, Frame
+from .screen import AdbScreen, Frame, validate_decision
 
 
 class DeviceSession:
@@ -19,8 +19,41 @@ class DeviceSession:
         self._active: asyncio.Task | None = None
         self._stop_lock = asyncio.Lock()
         self._stopping = False
+        self._agent_owner = None
+        self._agent_running = False
+
+    def guard_manual(self) -> None:
+        if self._agent_owner is not None and self._agent_running:
+            raise DeviceError("Pause the task and wait for input release before manual control")
+
+    async def reserve(self, owner) -> None:
+        if self._agent_owner is not None or self._lock.locked() or self._stopping:
+            raise DeviceError("Stop the current operation or task before starting another task")
+        async with self._lock:
+            if not self.controller or not self.controller.capabilities:
+                raise DeviceError("Connect the phone and an available controller first")
+            self._agent_owner, self._agent_running = owner, True
+
+    def suspend(self, owner) -> None:
+        if self._agent_owner is owner:
+            self._agent_running = False
+
+    def activate(self, owner) -> None:
+        if self._agent_owner is not owner or self._lock.locked() or self._stopping:
+            raise DeviceError("Wait for manual input to finish before resuming")
+        self._agent_running = True
+
+    def release(self, owner) -> None:
+        if self._agent_owner is owner:
+            self._agent_owner, self._agent_running = None, False
+
+    def _guard_selection(self, serial: str) -> None:
+        self.guard_manual()
+        if self._agent_owner is not None and serial != self.serial:
+            raise DeviceError("Stop the paused task before selecting another phone")
 
     async def select(self, serial: str) -> None:
+        self._guard_selection(serial)
         if self._lock.locked() or self._stopping:
             raise DeviceError("Stop the current operation before changing devices")
         devices = await self.adb.devices()
@@ -29,6 +62,9 @@ class DeviceSession:
                 "Device is offline or unauthorized; unlock it and authorize this computer"
             )
         async with self._lock:
+            self._guard_selection(serial)
+            if self._agent_owner is not None and self.controller.mode != "adb":
+                raise DeviceError("Reconnect the BLE board without changing the task control mode")
             await self._close_controller()
             self._epoch += 1
             self.serial = serial
@@ -42,11 +78,15 @@ class DeviceSession:
     async def set_mode(
         self, mode: str, bridge: SerialBridge | None = None, calibration: Calibration | None = None
     ) -> None:
+        self.guard_manual()
         if not self.serial:
             raise DeviceError("Select the phone before binding a BLE board")
         if self._lock.locked() or self._stopping:
             raise DeviceError("Stop the current operation before switching control mode")
         async with self._lock:
+            self.guard_manual()
+            if self._agent_owner is not None and self.controller.mode != mode:
+                raise DeviceError("Stop the paused task before changing its control mode")
             self._epoch += 1
             await self._close_controller()
             self.controller = AdbController(self.adb, self.serial)
@@ -58,9 +98,11 @@ class DeviceSession:
                 await bridge.open()
 
     async def calibrate(self, calibration: Calibration) -> None:
+        self.guard_manual()
         if self._lock.locked() or self._stopping:
             raise DeviceError("Stop the current operation before changing calibration")
         async with self._lock:
+            self.guard_manual()
             if not isinstance(self.controller, BleController):
                 raise DeviceError("Connect the BLE board before calibrating")
             if not self.controller.bridge.connected or not self.controller.bridge.ble_connected:
@@ -72,10 +114,12 @@ class DeviceSession:
             self.controller.calibration = calibration
 
     async def locate(self, probe: PointerProbe) -> dict:
+        self.guard_manual()
         if self._stopping:
             raise DeviceError("Stop is still releasing input")
         epoch = self._epoch
         async with self._lock:
+            self.guard_manual()
             if epoch != self._epoch or not isinstance(self.controller, BleController):
                 raise DeviceError("BLE calibration operation cancelled or unavailable")
             self._active = asyncio.current_task()
@@ -85,10 +129,27 @@ class DeviceSession:
                 self._active = None
 
     async def execute(self, action: Action, frame: Frame | None = None) -> dict:
+        result, _ = await self._execute(action, frame)
+        return result
+
+    async def execute_agent(self, owner, action: Action, reference: Frame,
+                            on_submit=None) -> tuple[dict, Frame]:
+        return await self._execute(action, owner=owner, reference=reference, on_submit=on_submit)
+
+    async def _execute(self, action: Action, frame: Frame | None = None,
+                       owner=None, reference: Frame | None = None,
+                       on_submit=None) -> tuple[dict, Frame]:
+        def guard():
+            if owner is None:
+                self.guard_manual()
+            elif self._agent_owner is not owner or not self._agent_running:
+                raise DeviceError("Agent no longer owns the running device session")
+        guard()
         if self._stopping:
             raise DeviceError("Stop is still releasing input; wait before operating")
         epoch = self._epoch
         async with self._lock:
+            guard()
             if epoch != self._epoch:
                 raise DeviceError("Operation cancelled by stop or device change")
             if not self.controller:
@@ -98,12 +159,23 @@ class DeviceSession:
                 current = frame or await self.screen.capture(force=True)
                 if current.serial != self.serial:
                     raise DeviceError("Screen does not belong to the selected device")
-                self.screen.validate_reference(action.frame_id, current)
+                if reference:
+                    await asyncio.to_thread(validate_decision, reference, current, action)
+                else:
+                    self.screen.validate_reference(action.frame_id, current)
+                if action.action not in self.controller.capabilities:
+                    raise DeviceError("Action is unavailable for the selected controller")
+                if isinstance(self.controller, BleController) and action.action in {"tap", "long_press", "swipe", "scroll"}:
+                    if not self.controller.calibration:
+                        raise DeviceError("Calibrate the BLE mouse before coordinate actions")
+                    self.controller.calibration.check(current)
+                if on_submit:
+                    on_submit(current)
                 timing = await self.controller.execute(action, current)
                 result = {"ok": True, "action": action.action, "frame_id": current.id}
                 if timing:
                     result["execution"] = timing
-                return result
+                return result, current
             finally:
                 self._active = None
 

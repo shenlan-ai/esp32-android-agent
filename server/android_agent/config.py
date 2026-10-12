@@ -39,6 +39,11 @@ class ModelSettings(BaseModel):
     def reserved_fields(cls, value: dict) -> dict:
         if {"messages", "model", "stream", "max_tokens"} & value.keys():
             raise ValueError("extra_body cannot override messages, model, stream or max_tokens")
+        if "max_completion_tokens" in value and (
+            type(value["max_completion_tokens"]) is not int
+            or not 64 <= value["max_completion_tokens"] <= 4096
+        ):
+            raise ValueError("max_completion_tokens must be an integer from 64 to 4096")
         return value
 
     def public(self) -> dict:

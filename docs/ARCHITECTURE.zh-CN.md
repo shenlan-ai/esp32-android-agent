@@ -1,6 +1,6 @@
 # ESP32 Android Agent 整体设计
 
-状态：设计基线，尚未代表已经实现或已经实机验证的功能。
+状态：整体设计基线。ADB手动工作台、单步自动任务闭环与经典ESP32 BLE串口路线已实现；当前板已刷入并验证通信。原生USB板路线、发布包和手机实机验收仍需完成，各项验证状态见COMPATIBILITY.md。
 
 参考项目：<https://github.com/onehumanbeing/esp32-iphone-agent>，参考提交 `27f36ce0f5d2d520ad5a45a0eea6eb99abbbe6f7`。
 

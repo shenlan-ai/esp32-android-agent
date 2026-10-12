@@ -67,16 +67,26 @@
         <label class="sr-only" for="goal" data-i18n="goal">操作目标</label>
         <textarea id="goal" rows="3" data-i18n-placeholder="goalPlaceholder" placeholder="打开设置，进入 Wi-Fi 页面"></textarea>
         <div class="row"><button id="run-task" class="primary" disabled data-i18n="startTask">开始任务</button><button id="pause-task" disabled data-i18n="takeover">暂停并接管</button><button id="resume-task" disabled data-i18n="resume">继续任务</button><button id="clear-task" disabled data-i18n="clear">清空记录</button></div>
-        <p id="task-help" class="helper" data-i18n="taskUnavailable">自动任务正在开发，当前可先验证连接和手动控制。</p>
+        <p id="task-help" class="helper" data-i18n="taskHelp">先确认手动控制正常并保存视觉模型配置。每步执行后核验画面，结果不确定时暂停。</p>
+        <p id="task-reason" role="status"></p>
+        <p id="task-usage" class="helper"></p>
+        <button id="export-task" type="button" hidden data-i18n="exportTask">导出当前任务</button>
         <details id="plan-section" hidden open><summary data-i18n="plan">当前计划</summary><p id="plan-text"></p></details>
         <ol id="steps" class="steps"></ol>
+        <details><summary data-i18n="history">本机任务记录</summary>
+          <button id="refresh-history" type="button" data-i18n="refreshHistory">刷新记录</button>
+          <ul id="history-list" class="service-list"></ul>
+          <div id="history-detail"></div>
+        </details>
       </section>
 
       <details class="settings-section" open><summary data-i18n="modelSettings">模型与运行设置</summary>
         <p class="helper" data-i18n="modelHelp">支持 OpenAI 兼容视觉模型。手动操作不需要模型；规划模型留空时共用执行模型。</p>
         <form id="settings-form">
-          <fieldset><legend data-i18n="actor">执行模型</legend><div class="fields"><label><span data-i18n="baseUrl">API 地址</span><input id="actor-base" type="url" required></label><label><span data-i18n="modelName">模型名称</span><input id="actor-model" autocomplete="off"></label><label><span>API Key</span><input id="actor-key" type="password" autocomplete="off"><small id="actor-key-status"></small></label></div><label class="checkbox"><input id="actor-clear-key" type="checkbox"><span data-i18n="clearKey">清除已保存密钥</span></label></fieldset>
-          <details><summary data-i18n="plannerOptional">规划模型（可选）</summary><div class="fields"><label><span data-i18n="baseUrl">API 地址</span><input id="planner-base" type="url"></label><label><span data-i18n="modelName">模型名称</span><input id="planner-model" autocomplete="off"></label><label><span>API Key</span><input id="planner-key" type="password" autocomplete="off"><small id="planner-key-status"></small></label></div><label class="checkbox"><input id="planner-clear-key" type="checkbox"><span data-i18n="clearKey">清除已保存密钥</span></label></details>
+          <fieldset><legend data-i18n="actor">执行模型</legend><div class="fields"><label><span data-i18n="baseUrl">API 地址</span><input id="actor-base" type="url" required></label><label><span data-i18n="modelName">模型名称</span><input id="actor-model" autocomplete="off"></label><label><span>API Key</span><input id="actor-key" type="password" autocomplete="off"><small id="actor-key-status"></small></label></div><label class="checkbox"><input id="actor-clear-key" type="checkbox"><span data-i18n="clearKey">清除已保存密钥</span></label>
+            <details><summary data-i18n="modelExtra">供应商可选参数</summary><label for="actor-extra" data-i18n="extraJson">额外 JSON 参数</label><textarea id="actor-extra" rows="3" spellcheck="false" placeholder="{}"></textarea><p class="helper" data-i18n="extraHelp">可留空。填写供应商支持的参数，例如 temperature 或 max_completion_tokens；不能覆盖模型、消息或请求流设置。</p></details>
+          </fieldset>
+          <details><summary data-i18n="plannerOptional">规划模型（可选）</summary><div class="fields"><label><span data-i18n="baseUrl">API 地址</span><input id="planner-base" type="url"></label><label><span data-i18n="modelName">模型名称</span><input id="planner-model" autocomplete="off"></label><label><span>API Key</span><input id="planner-key" type="password" autocomplete="off"><small id="planner-key-status"></small></label></div><label class="checkbox"><input id="planner-clear-key" type="checkbox"><span data-i18n="clearKey">清除已保存密钥</span></label><label for="planner-extra" data-i18n="extraJson">额外 JSON 参数</label><textarea id="planner-extra" rows="3" spellcheck="false" placeholder="{}"></textarea></details>
           <div class="fields limits"><label><span data-i18n="maxSteps">最多动作数</span><input id="max-steps" type="number" min="1" max="200" required></label><label><span data-i18n="maxSeconds">任务时限（秒）</span><input id="max-seconds" type="number" min="10" max="7200" required></label><label><span data-i18n="tokenLimit">累计 Token 上限</span><input id="max-tokens" type="number" min="1000" max="2000000" required></label></div>
           <label class="checkbox"><input id="save-screenshots" type="checkbox"><span data-i18n="saveScreenshots">在本机保存任务截图</span></label>
           <div class="row"><button class="primary" data-i18n="saveSettings">保存设置</button><button id="test-model" type="button" disabled data-i18n="testModel">测试模型</button></div>

@@ -1,0 +1,9 @@
+server/**
+README.md
+docs/ARCHITECTURE.zh-CN.md
+docs/COMPATIBILITY.md
+docs/AGENT-USAGE.md
+docs/DEVELOPMENT.md
+openspec/specs/agent-execution/spec.md
+openspec/specs/task-history/spec.md
+openspec/specs/product-foundation/spec.md

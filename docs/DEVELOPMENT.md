@@ -41,6 +41,14 @@ node --test server/tests/geometry.test.mjs
 
 Node 仅用于贡献者测试网页坐标计算，用户运行服务不依赖 Node。macOS/Linux 使用 `.venv/bin`。
 
+自动任务关键测试使用MockTransport、假手机/控制器/模型，不调用付费接口。离线浏览器验收可执行：
+
+```text
+.venv/Scripts/python server/tests/agent_demo.py
+```
+
+打开`http://127.0.0.1:8892`。页面明确标注DEMO，不开放真实开发板端口，不调用真实ADB或外部模型；支持正常任务、慢请求暂停、模型测试和本机记录导出。模拟数据只进入`.runtime-local/agent-demo`。结束后关闭此进程，不能把其成功画面作为实机验收。
+
 ```text
 openspec archive <change-id> --yes
 openspec validate --all --strict --no-interactive

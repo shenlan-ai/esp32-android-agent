@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from PIL import Image, ImageChops, UnidentifiedImageError
 
 from .errors import ScreenError, StaleFrameError
+from .models import Action
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,30 @@ def difference(a: Frame, b: Frame) -> float:
             images.append(image.convert("L").resize((64, 128)))
     pixels = ImageChops.difference(*images).tobytes()
     return sum(pixels) / len(pixels)
+
+
+def validate_decision(reference: Frame, current: Frame, action: Action) -> None:
+    if ((reference.serial, reference.width, reference.height)
+            != (current.serial, current.width, current.height)
+            or time.monotonic() - reference.received > 60):
+        raise StaleFrameError("Decision screen is stale or rotated; observe again")
+    if current.dark:
+        raise ScreenError("Screen is dark or protected; unlock the phone before continuing")
+    crop = None
+    if action.action in {"tap", "long_press"}:
+        x, y = current.pixel(action.x, action.y)
+        rx, ry = max(24, current.width // 20), max(24, current.height // 20)
+        crop = (max(0, x-rx), max(0, y-ry), min(current.width, x+rx), min(current.height, y+ry))
+    images = []
+    for frame in (reference, current):
+        with Image.open(io.BytesIO(frame.png)) as image:
+            region = image.crop(crop) if crop else image
+            images.append(region.convert("RGB").resize((96, 96) if crop else (128, 256)))
+    pixels = ImageChops.difference(*images).tobytes()
+    mean = sum(pixels) / len(pixels)
+    fraction = sum(p > 18 for p in pixels) / len(pixels)
+    if mean > 4 or fraction > 0.04:
+        raise StaleFrameError("Relevant screen content changed while the model was thinking")
 
 
 class AdbScreen:
