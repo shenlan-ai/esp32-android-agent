@@ -8,6 +8,7 @@ import re
 import secrets
 import time
 
+from .async_utils import wait_for
 from .ble import CAPABILITIES, BleController, SerialBridge
 from .errors import DeviceError
 
@@ -86,8 +87,8 @@ class UsbBridge(SerialBridge):
         try:
             async with self._write_lock:
                 self.writer.write(data)
-                await asyncio.wait_for(self.writer.drain(), 0.5)
-        except (OSError, TimeoutError) as exc:
+                await wait_for(self.writer.drain(), 0.5)
+        except (OSError, asyncio.TimeoutError) as exc:
             self._fail("USB board write failed; action result is unknown, reconnect and observe")
             raise DeviceError(self._error) from exc
 
@@ -104,8 +105,8 @@ class UsbBridge(SerialBridge):
         await asyncio.gather(*tasks, return_exceptions=True)
         self._fail("USB board network connection is closed")
         try:
-            await asyncio.wait_for(self.writer.wait_closed(), 1)
-        except (OSError, TimeoutError):
+            await wait_for(self.writer.wait_closed(), 1)
+        except (OSError, asyncio.TimeoutError):
             pass
 
 
@@ -160,8 +161,8 @@ class UsbListener:
         try:
             nonce = secrets.token_hex(32)
             writer.write((json.dumps({"v": 1, "op": "challenge", "nonce": nonce}) + "\n").encode())
-            await asyncio.wait_for(writer.drain(), 0.5)
-            line = await asyncio.wait_for(reader.readline(), 3)
+            await wait_for(writer.drain(), 0.5)
+            line = await wait_for(reader.readline(), 3)
             if not line.endswith(b"\n") or len(line) > 1024:
                 return
             auth = json.loads(line)
@@ -183,7 +184,7 @@ class UsbListener:
                 self.current = bridge
             # Own the socket lifecycle even when no controller is selected.
             await bridge._reader
-        except (OSError, ValueError, TimeoutError, DeviceError):
+        except (OSError, ValueError, asyncio.TimeoutError, DeviceError):
             pass  # Do not log attacker-controlled data or authentication material.
         finally:
             try:
@@ -192,8 +193,8 @@ class UsbListener:
                 else:
                     writer.close()
                     try:
-                        await asyncio.wait_for(writer.wait_closed(), 1)
-                    except (OSError, TimeoutError):
+                        await wait_for(writer.wait_closed(), 1)
+                    except (OSError, asyncio.TimeoutError):
                         pass
             finally:
                 self._clients.discard(task)

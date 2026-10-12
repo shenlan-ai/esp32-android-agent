@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from pydantic import ValidationError
 
+from .async_utils import wait_for
 from .ble import KEYS as BLE_KEYS
 from .ble import BleController
 from .config import Preferences
@@ -269,10 +270,10 @@ class TaskRunner:
             self._clients["actor"] = self.model_factory(self.prefs.actor)
             self._clients["planner"] = self.model_factory(planner)
             remaining = max(0, self.prefs.max_seconds - self._spent)
-            await asyncio.wait_for(self._loop(), timeout=remaining)
+            await wait_for(self._loop(), timeout=remaining)
         except asyncio.CancelledError:
             raise  # pause/stop owns release after this task has fully unwound.
-        except TimeoutError:
+        except asyncio.TimeoutError:
             await self._settle("failed", "Active task time limit reached")
         except (DeviceError, ScreenError) as exc:
             await self._settle("paused", str(exc) + "; reconnect or unlock, then resume with a fresh plan")

@@ -16,6 +16,10 @@
 - **WHEN** 工具未安装或执行失败
 - **THEN** 服务与网页仍可启动，返回可操作的诊断信息
 
+#### Scenario: Read-only operation completes while cancellation arrives
+- **WHEN** 支持Python版本中只读操作完成与显式取消同时到达
+- **THEN** 系统 MUST 保留取消并回收相关等待或子进程，写Flash仍由原拥有任务规则保护
+
 ### Requirement: Wireless pairing and connection are distinct
 系统 SHALL 区分配对地址、配对码和连接地址，校验输入，显示发现服务及连接结果，且错误与日志不得泄露配对码。
 

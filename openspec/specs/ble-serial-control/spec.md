@@ -17,7 +17,7 @@
 - **THEN** 返回状态或已记录结果，不再次执行输入
 
 ### Requirement: Interruptible control and honest results
-长动作 SHALL 按短周期调度，同时处理停止和心跳。BLE断线或主机心跳失效 MUST 清空动作、清理输入状态并作废会话。主机 MUST 不自动重试结果未知的动作；命令完成不等于手机目标达成。
+长动作 SHALL 按短周期调度，同时处理停止和心跳。BLE断线或主机心跳失效 MUST 清空动作、清理输入状态并作废会话。主机 MUST 不自动重试结果未知的动作；命令完成不等于手机目标达成。Python3.10及以上版本的异步响应超时 MUST 使连接失效并报告动作结果未知。
 
 #### Scenario: Stop during drag
 - **WHEN** 鼠标拖动执行中收到stop
@@ -34,6 +34,14 @@
 #### Scenario: BLE notification is unavailable
 - **WHEN** HID报告未订阅或GATT发送失败
 - **THEN** 不将动作报告为done，清理输入并使故障会话失效，提示重新观察和连接
+
+#### Scenario: Host action response times out on a supported runtime
+- **WHEN** Python3.10或更新版本已发送动作但未收到done
+- **THEN** 失效连接、报告结果未知且只发送一次动作，不泄漏异步超时异常到调用者
+
+#### Scenario: Completion races with caller cancellation
+- **WHEN** 支持Python版本中有时限的等待完成与外层取消同时到达
+- **THEN** 系统 MUST 保留取消并回收等待任务，不能继续执行循环或阻塞停止
 
 ### Requirement: Explicit backend and calibrated coordinates
 用户 SHALL 显式绑定当前手机与BLE板子。坐标动作 MUST 使用该手机及完整截图尺寸对应的校准；未校准、截图尺寸变化或BLE未连接 SHALL 拒绝输入。特殊安卓导航键未验证时不得列为BLE能力。

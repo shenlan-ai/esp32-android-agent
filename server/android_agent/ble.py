@@ -9,6 +9,7 @@ import serial
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 from serial.tools import list_ports
 
+from .async_utils import wait_for
 from .errors import DeviceError
 from .models import Action
 from .screen import Frame
@@ -230,8 +231,8 @@ class SerialBridge:
                 {"v": PROTOCOL, "session": self.session, "id": command_id, "op": op, **args}
             )
             try:
-                result = await asyncio.wait_for(future, timeout)
-            except TimeoutError as exc:
+                result = await wait_for(future, timeout)
+            except asyncio.TimeoutError as exc:
                 self._fail(
                     "Board timeout; action result is unknown, reconnect and observe the phone"
                 )

@@ -7,6 +7,7 @@ import shlex
 import shutil
 from pathlib import Path
 
+from .async_utils import wait_for
 from .errors import DeviceError
 from .models import DeviceInfo
 
@@ -46,7 +47,7 @@ class AdbClient:
             raise DeviceError("Could not start ADB; check the tool path and permissions") from exc
         self._processes.add(proc)
         try:
-            out, err = await asyncio.wait_for(proc.communicate(), timeout or self.timeout)
+            out, err = await wait_for(proc.communicate(), timeout or self.timeout)
             if proc.returncode:
                 # Arguments may contain text or pairing credentials: never echo the command.
                 detail = err.decode("utf-8", errors="replace").strip()[:300]

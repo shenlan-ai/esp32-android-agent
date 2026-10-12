@@ -1,0 +1,14 @@
+server/android_agent/agent.py
+server/android_agent/ble.py
+server/android_agent/usb.py
+server/android_agent/app.py
+server/tests/test_timeout_compatibility.py
+openspec/specs/agent-execution/spec.md
+openspec/specs/ble-serial-control/spec.md
+openspec/specs/usb-hid-control/spec.md
+openspec/specs/task-history/spec.md
+server/android_agent/async_utils.py
+server/android_agent/adb.py
+server/android_agent/firmware.py
+openspec/specs/device-connection/spec.md
+openspec/specs/firmware-installation/spec.md

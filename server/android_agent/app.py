@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 from . import __version__
 from .adb import AdbClient
 from .agent import RUNNING_STATES, TaskRunner
+from .async_utils import wait_for
 from .ble import (
     BleController,
     BridgeSelection,
@@ -435,9 +436,9 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
                 yield 'event: reset\ndata: {}\n\n'
                 while not await request.is_disconnected():
                     try:
-                        event = await asyncio.wait_for(queue.get(), timeout=15)
+                        event = await wait_for(queue.get(), timeout=15)
                         yield f"event: {event['event']}\ndata: {json.dumps(event)}\n\n"
-                    except TimeoutError:
+                    except asyncio.TimeoutError:
                         yield ': heartbeat\n\n'
         return StreamingResponse(stream(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

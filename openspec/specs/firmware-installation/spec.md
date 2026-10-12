@@ -38,6 +38,10 @@
 - **WHEN** 用户按Esc或手机紧急停止
 - **THEN** 释放手机输入但不终止固件工具，也不排队在刷写结束后执行旧动作
 
+#### Scenario: Read-only operation completes while cancellation arrives
+- **WHEN** 支持Python版本中只读操作完成与显式取消同时到达
+- **THEN** 系统 MUST 保留取消并回收相关等待或子进程，写Flash仍由原拥有任务规则保护
+
 ### Requirement: Honest write result and local recovery evidence
 工具 SHALL 使用已验证的内存镜像执行写入与读取校验，报告镜像校验和手机输入验收为不同证据。失败 MUST 保留完整原备份并说明可能未知的写入结果，不暴露任意路径、原始Flash内容或密钥到日志。历史备份 SHALL 不在服务重启后自动恢复写入。
 

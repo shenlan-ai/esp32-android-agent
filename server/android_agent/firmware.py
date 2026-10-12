@@ -15,6 +15,7 @@ import time
 from importlib import metadata
 from pathlib import Path
 
+from .async_utils import wait_for
 from .ble import BleController
 from .board_info import PROFILES
 from .errors import DeviceError
@@ -64,7 +65,7 @@ class FirmwareTool:
                 "/PID", str(proc.pid), "/T", "/F",
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
             try:
-                await asyncio.wait_for(killer.wait(), 10)
+                await wait_for(killer.wait(), 10)
             except asyncio.TimeoutError:
                 killer.kill()
                 await killer.wait()
@@ -110,7 +111,7 @@ class FirmwareTool:
             await err
             return output, overflow
         try:
-            output, overflow = await asyncio.wait_for(collect(), timeout)
+            output, overflow = await wait_for(collect(), timeout)
             if proc.returncode or overflow:
                 raise DeviceError("Firmware tool failed; check USB power, driver and port ownership. Writing may be incomplete; keep the backup.")
             result = json.loads(output)

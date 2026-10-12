@@ -1,0 +1,9 @@
+## Decisions
+
+以asyncio.TimeoutError作为asyncio.wait_for的异常接口；不引入新依赖、版本条件或广泛except Exception。Python3.10中此类独立于内建TimeoutError；3.11+别名保持旧路径。ADB与固件工具已经使用正确类型，HTTP模型层使用httpx.TimeoutException，保持不动。
+
+测试在实际解释器产生超时，而不是手工抛同名异常。对SSE15秒、USB3秒认证和0.5/1秒网络等待，在测试中按特定原时限缩短等待，仍调用实际asyncio.wait_for；不修改生产时限。发送测试记录实际写入次数与连接失效，关闭测试用未响应writer证明有界返回；认证使用真实localhost TCP并检查拥有的连接任务无异常；SSE实际生成器经过心跳后仍交付事件并释放订阅。现有Agent时限/BLE与USB unknown-action测试继续作为回归证据。
+
+Windows3.10与3.12完整pytest/Ruff；原工具测试已在3.10通过41项，无工具/固件变动不重复编译。失败日志与运行依赖保存在.runtime-local/python310。最低版本通过后才能更新兼容文档；平台/Android/真实模型未验证不扩大声明。
+
+新增async_utils.wait_for：ensure_future接管等待对象，以asyncio.wait设置时限；正常完成返回原结果，异常/超时/外层取消均取消并gather回收子任务后重新抛出。完成同时发生的外层取消必须保留，不以已完成子任务结果吞掉。所有6个模块统一使用该函数，避免任务停止、BLE心跳、USB发送与握手、ADB子进程、固件只读工具和SSE各自依赖旧wait_for竞态。原超时值、模型HTTP策略和固件拥有任务规则保持。测试通过内层完成前取消父任务确定性制造竞争，并检查取消被传播、超时finally执行、无剩余子任务及原异常返回。
