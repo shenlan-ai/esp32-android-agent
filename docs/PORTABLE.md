@@ -50,3 +50,5 @@ python scripts/smoke_portable.py "D:\便携验收\esp32-android-agent\esp32-andr
 ```
 
 smoke 对照完整 `checksums.json`，然后移除系统 Python/ADB 路径，用隔离目录启动真实 exe；验证页面、静态资源、API、缺 ADB 错误及第二进程端口冲突，结束后关闭测试进程。应在添加 Platform Tools 前运行，因为额外文件会被检查拒绝。此过程不调用模型、串口或真实手机，也不能替代实机任务验收。
+
+GitHub中的 `Build Windows portable artifact` 工作流可手动触发以上构建与解压验收，通过后保留ZIP和SHA的artifact 7天，不发布Release。该配置已在本机通过语法和等效命令检查，首次远程运行仍待验证；不会因存在此workflow就自动生成正式版本。

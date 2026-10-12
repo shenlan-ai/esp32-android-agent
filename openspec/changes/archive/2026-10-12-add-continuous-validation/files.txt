@@ -1,0 +1,10 @@
+.github/workflows/ci.yml
+.github/workflows/portable.yml
+scripts/ci_base.py
+scripts/tests/test_ci_base.py
+scripts/check_workflows.py
+server/pyproject.toml
+docs/DEVELOPMENT.md
+docs/PORTABLE.md
+CONTRIBUTING.md
+openspec/specs/continuous-validation/spec.md
