@@ -1,0 +1,14 @@
+server/android_agent/__main__.py
+server/android_agent/launcher.py
+server/pyproject.toml
+server/tests/test_launcher.py
+scripts/build_portable.py
+scripts/collect_firmware.py
+scripts/smoke_portable.py
+scripts/tests/test_release_tools.py
+packaging/windows_entry.py
+packaging/sources.json
+docs/PORTABLE.md
+docs/DEVELOPMENT.md
+README.md
+openspec/specs/portable-distribution/spec.md

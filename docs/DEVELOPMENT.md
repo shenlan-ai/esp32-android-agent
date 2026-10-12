@@ -43,6 +43,8 @@ node --test server/tests/geometry.test.mjs
 
 Node 仅用于贡献者测试网页坐标计算，用户运行服务不依赖 Node。macOS/Linux 使用 `.venv/bin`。
 
+Windows便携包构建与真实子进程验收见 [便携包说明](PORTABLE.md)。`server[build]` 固定 PyInstaller6.16.0；产物含实际运行依赖版本、许可、项目与第三方源码及四板固件。构建不发布、不刷设备，ADB由用户从官方单独安装。
+
 S3 原生 USB 固件矩阵：`python -m platformio run -d hardware/usb_bridge`。它直接复用 BLE 固件的动作调度与验证 headers，原生 g++ 检查继续通过 `python -m unittest discover -s scripts/tests` 执行。USB TCP/CDC 测试不需要设备；网页配网 fixture 为 `python server/tests/usb_demo.py`，仅本机 8892/8893，带 DEMO 标识，结束后关闭服务。详见 [USB说明](USB-SETUP.md)。
 
 自动任务关键测试使用MockTransport、假手机/控制器/模型，不调用付费接口。离线浏览器验收可执行：

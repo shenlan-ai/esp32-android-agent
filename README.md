@@ -8,7 +8,11 @@
 
 当前连接板已经实测识别为 **ESP32-D0WD-V3 v3.1、4MB Flash、COM5**。它没有原生USB HID，不能刷参考项目的S3固件。连接、构建与保留原固件步骤见 [BLE 使用说明](docs/BLE-SETUP.md)，验证状态见 [兼容表](docs/COMPATIBILITY.md)。
 
-S3 的 DevKitC-1 N8、XIAO ESP32S3 和 S3 Zero 4MB 固件构建通过；网页写入网络和配对信息，无需改源码。主机连接和配网已模拟验证，S3 实机输入待验收。流程见 [USB 使用说明](docs/USB-SETUP.md)。预编译发布包和 S3 通用刷写入口仍在开发。
+S3 的 DevKitC-1 N8、XIAO ESP32S3 和 S3 Zero 4MB 固件构建通过；网页写入网络和配对信息，无需改源码。主机连接和配网已模拟验证，S3 实机输入待验收。流程见 [USB 使用说明](docs/USB-SETUP.md)。S3 通用刷写入口仍在开发。
+
+## Windows 便携运行
+
+贡献者可构建包含 Python、网页、四板固件和依赖来源的 Windows x64 ZIP，用户解压后双击 exe 启动。ADB 从 Google 官方下载，放在 exe 旁 `platform-tools` 目录；无需安装 Python、Node 或 Arduino。构建、启动和校验见 [便携包说明](docs/PORTABLE.md)。当前产物仅在本机验证，尚未发布正式二进制版本，实机限制见兼容表。
 
 ## 源码运行
 
@@ -22,7 +26,7 @@ python -m venv .venv
 
 macOS/Linux 使用 `.venv/bin/python`。打开 `http://127.0.0.1:8890`，连接并授权手机，在网页选择设备。
 
-ADB 不在 PATH 时使用 `--adb <绝对路径>`；端口可通过 `--port` 调整。无线连接在网页向导中完成，配对地址与连接地址使用各自端口。
+ADB 不在 PATH 时使用 `--adb <绝对路径>`；端口可通过 `--port` 调整，`--diagnose` 查看环境，`--open-browser` 启动后打开页面。无线连接在网页向导中完成，配对地址与连接地址使用各自端口。
 
 确认手动控制正常后，在网页保存视觉模型地址、名称与密钥，点击“测试模型”，再输入自然语言目标。模型测试使用合成图片，任务运行时才上传手机画面到你配置的服务。详细流程、暂停恢复与用量边界见 [自动任务使用说明](docs/AGENT-USAGE.md)。
 
