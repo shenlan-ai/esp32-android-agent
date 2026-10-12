@@ -31,6 +31,16 @@ python -m unittest discover -s scripts/tests
 
 ## 完成变更
 
+服务端检查（在仓库根目录，已安装 `./server[dev]`）：
+
+```text
+.venv\Scripts\python -m pytest -q server/tests
+.venv\Scripts\ruff check server
+node --test server/tests/geometry.test.mjs
+```
+
+Node 仅用于贡献者测试网页坐标计算，用户运行服务不依赖 Node。macOS/Linux 使用 `.venv/bin`。
+
 ```text
 openspec archive <change-id> --yes
 openspec validate --all --strict --no-interactive

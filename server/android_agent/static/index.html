@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ESP32 Android Agent</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div><h1>ESP32 Android Agent</h1><p data-i18n="tagline">在自己的电脑上，让 AI 操作真实安卓手机</p></div>
+    <div class="header-tools"><span id="connection-state" role="status">连接服务中…</span><button id="language" type="button">English</button></div>
+  </header>
+  <div id="message" role="alert" hidden></div>
+  <section id="access-section" class="access" hidden>
+    <label for="access-token" data-i18n="accessToken">访问令牌</label>
+    <input id="access-token" type="password" autocomplete="off">
+    <button id="access-login" data-i18n="connect">连接</button>
+  </section>
+  <main>
+    <aside class="device-pane">
+      <div class="pane-title"><h2 data-i18n="phoneScreen">手机画面</h2><span id="mode-label">未选择设备</span></div>
+      <div class="screen-stage">
+        <img id="live" alt="手机实时画面" draggable="false">
+        <div id="screen-hint"><strong data-i18n="screenEmpty">先连接一台手机</strong><p data-i18n="screenHelp">在右侧刷新设备列表，解锁手机并允许 USB 调试，然后选择设备。</p></div>
+      </div>
+      <p class="helper" data-i18n="gestureHelp">点击点按，拖动滑动，按住长按，滚轮滚动。</p>
+      <button id="emergency-stop" class="stop-button" data-i18n="emergencyStop">紧急停止</button>
+      <p class="helper" data-i18n="stopHelp">也可按 Esc。停止会取消待执行动作并释放输入。</p>
+      <div class="manual-actions">
+        <button data-action="home" data-i18n="home">主页</button>
+        <button data-action="back" data-i18n="back">返回</button>
+        <button data-action="recents" data-i18n="recents">最近任务</button>
+      </div>
+      <form id="text-form" class="row"><label class="sr-only" for="input-text" data-i18n="textInput">输入文字</label><input id="input-text" autocomplete="off" placeholder="ASCII text"><button data-i18n="type">输入</button></form>
+      <form id="key-form" class="row"><label class="sr-only" for="input-key" data-i18n="keyInput">按键</label><select id="input-key"><option value="enter">Enter</option><option value="backspace">Backspace</option><option value="esc">Esc</option><option value="tab">Tab</option><option value="space">Space</option><option value="up">↑</option><option value="down">↓</option><option value="left">←</option><option value="right">→</option></select><button data-i18n="pressKey">按键</button></form>
+      <p class="helper" data-i18n="asciiHelp">基础模式支持 ASCII。中文输入需要可选输入法扩展。</p>
+    </aside>
+
+    <div class="workspace">
+      <section class="setup-section">
+        <div class="section-title"><h2 data-i18n="connection">设备连接</h2><button id="refresh-devices" data-i18n="refreshDevices">刷新设备</button></div>
+        <p id="device-diagnostic" class="helper"></p>
+        <div class="row"><label class="sr-only" for="device-select" data-i18n="chooseDevice">选择手机</label><select id="device-select"><option value="">选择手机</option></select><button id="select-device" class="primary" data-i18n="selectDevice">连接设备</button></div>
+        <details><summary data-i18n="wirelessSetup">无线连接与配对</summary>
+          <p class="helper" data-i18n="wirelessHelp">Android 11+：开发者选项 → 无线调试 → 使用配对码配对。配对端口与连接端口不同。</p>
+          <form id="pair-form" class="fields three"><label><span data-i18n="pairAddress">配对地址</span><input id="pair-address" placeholder="192.168.1.10:37000" required></label><label><span data-i18n="pairCode">六位配对码</span><input id="pair-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" required></label><button data-i18n="pair">配对手机</button></form>
+          <form id="connect-form" class="row"><label class="sr-only" for="connect-address" data-i18n="connectAddress">连接地址</label><input id="connect-address" placeholder="192.168.1.10:41000" required><button data-i18n="connect">连接</button><button id="discover" type="button" data-i18n="discover">发现服务</button></form>
+          <ul id="discovered-services" class="service-list"></ul>
+        </details>
+      </section>
+
+      <section class="task-section">
+        <div class="section-title"><h2 data-i18n="task">任务</h2><span id="task-state">待命</span></div>
+        <label class="sr-only" for="goal" data-i18n="goal">操作目标</label>
+        <textarea id="goal" rows="3" data-i18n-placeholder="goalPlaceholder" placeholder="打开设置，进入 Wi-Fi 页面"></textarea>
+        <div class="row"><button id="run-task" class="primary" disabled data-i18n="startTask">开始任务</button><button id="pause-task" disabled data-i18n="takeover">暂停并接管</button><button id="resume-task" disabled data-i18n="resume">继续任务</button><button id="clear-task" disabled data-i18n="clear">清空记录</button></div>
+        <p id="task-help" class="helper" data-i18n="taskUnavailable">自动任务正在开发，当前可先验证连接和手动控制。</p>
+        <details id="plan-section" hidden open><summary data-i18n="plan">当前计划</summary><p id="plan-text"></p></details>
+        <ol id="steps" class="steps"></ol>
+      </section>
+
+      <details class="settings-section" open><summary data-i18n="modelSettings">模型与运行设置</summary>
+        <p class="helper" data-i18n="modelHelp">支持 OpenAI 兼容视觉模型。手动操作不需要模型；规划模型留空时共用执行模型。</p>
+        <form id="settings-form">
+          <fieldset><legend data-i18n="actor">执行模型</legend><div class="fields"><label><span data-i18n="baseUrl">API 地址</span><input id="actor-base" type="url" required></label><label><span data-i18n="modelName">模型名称</span><input id="actor-model" autocomplete="off"></label><label><span>API Key</span><input id="actor-key" type="password" autocomplete="off"><small id="actor-key-status"></small></label></div><label class="checkbox"><input id="actor-clear-key" type="checkbox"><span data-i18n="clearKey">清除已保存密钥</span></label></fieldset>
+          <details><summary data-i18n="plannerOptional">规划模型（可选）</summary><div class="fields"><label><span data-i18n="baseUrl">API 地址</span><input id="planner-base" type="url"></label><label><span data-i18n="modelName">模型名称</span><input id="planner-model" autocomplete="off"></label><label><span>API Key</span><input id="planner-key" type="password" autocomplete="off"><small id="planner-key-status"></small></label></div><label class="checkbox"><input id="planner-clear-key" type="checkbox"><span data-i18n="clearKey">清除已保存密钥</span></label></details>
+          <div class="fields limits"><label><span data-i18n="maxSteps">最多动作数</span><input id="max-steps" type="number" min="1" max="200" required></label><label><span data-i18n="maxSeconds">任务时限（秒）</span><input id="max-seconds" type="number" min="10" max="7200" required></label><label><span data-i18n="tokenLimit">累计 Token 上限</span><input id="max-tokens" type="number" min="1000" max="2000000" required></label></div>
+          <label class="checkbox"><input id="save-screenshots" type="checkbox"><span data-i18n="saveScreenshots">在本机保存任务截图</span></label>
+          <div class="row"><button class="primary" data-i18n="saveSettings">保存设置</button><button id="test-model" type="button" disabled data-i18n="testModel">测试模型</button></div>
+        </form>
+      </details>
+    </div>
+  </main>
+  <footer><span data-i18n="localFooter">本机服务 · 手机画面仅发送到你配置的模型服务</span><span id="version"></span></footer>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

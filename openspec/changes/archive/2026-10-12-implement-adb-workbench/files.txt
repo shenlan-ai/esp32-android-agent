@@ -1,0 +1,8 @@
+server/**
+.gitignore
+README.md
+docs/DEVELOPMENT.md
+openspec/specs/device-connection/spec.md
+openspec/specs/screen-capture/spec.md
+openspec/specs/manual-control/spec.md
+openspec/specs/local-settings/spec.md

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "esp32-android-agent"
+version = "0.1.0"
+description = "Local Android vision agent with ADB and ESP32 USB HID"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+  "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "httpx>=0.27,<1",
+  "pillow>=11,<13", "pydantic>=2.10,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "ruff>=0.9,<1"]
+
+[project.scripts]
+android-agent = "android_agent.__main__:main"
+
+[tool.setuptools]
+packages = ["android_agent"]
+
+[tool.setuptools.package-data]
+android_agent = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
