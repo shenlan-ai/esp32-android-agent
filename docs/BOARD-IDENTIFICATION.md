@@ -11,7 +11,9 @@
 - Flash：4MB；Flash ID 厂商 c4 / 设备 6016，3.3V。
 - PCB 商品名：串口信息无法确定；固件使用通用经典 ESP32 配置，无需猜测 DevKit 商品名。
 
-以上芯片和存储信息由 esptool 5.5.0 在 COM5 上读取，并使用 `--no-stub` 复核。当前板子没有原生 USB HID，适配方向为 BLE 键鼠。当前没有刷写固件，也没有进行手机蓝牙验收。
+以上芯片和存储信息由 esptool 5.5.0 在 COM5 上读取，并使用 `--no-stub` 复核。当前板子没有原生 USB HID，适配方向为 BLE 键鼠。识别阶段没有写入Flash。
+
+随后经用户明确授权，2026-10-12向当前板刷入本项目BLE固件0.1.0，esptool写后校验通过。刷写前完整4MB备份已在本机保留，SHA256与识别后的首次备份一致。真实串口握手、状态、错误版本/会话拒绝、消息解析恢复、停止、心跳看门狗及生产主机重连共12项检查通过。手机尚未配对，键鼠输入与手机端释放仍待验收。
 
 驱动来源为 [Microsoft Update Catalog](https://www.catalog.update.microsoft.com/Search.aspx?q=CP210x)，更新 ID `34213758-173c-47ec-951d-16b2c9463881`。下载 CAB SHA256：`7EA8A03769A05C7BB78718C360B5079BE354ED6437623408D51B9C1E8F5A122A`；CAT 验证结果 Valid，签名者为 Microsoft Windows Hardware Compatibility Publisher。驱动通过正常 Windows UAC 和 pnputil 安装。
 

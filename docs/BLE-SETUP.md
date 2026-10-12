@@ -36,6 +36,14 @@ python scripts/flash_board.py --port COM5 --write --confirm-overwrite
 
 脚本先验证构建产物、再创建完整备份，成功后才写bootloader、分区、OTA初始化和app；esptool校验写入数据。此命令会替换原固件，不是芯片识别。
 
+刷写后关闭其他串口工具，在已安装服务端依赖的环境执行：
+
+```text
+.venv/Scripts/python.exe scripts/check_board_link.py --port COM5
+```
+
+该检查不发送点击、鼠标移动或键盘动作；验证协议握手、错误消息拒绝、停止回复、心跳看门狗、生产主机自动心跳及关闭重连。报告明确区分板上通信与手机输入验收。它会建立新会话并清理输入，应在没有运行任务时执行。
+
 ## 配对和校准
 
 1. 板子留在电脑，手机在系统蓝牙设置配对`Android Agent BLE`。若换手机，先在原手机忘记设备。
@@ -49,4 +57,6 @@ python scripts/flash_board.py --port COM5 --write --confirm-overwrite
 
 ## 状态边界
 
-固件编译通过仅证明当前芯片目标可构建。尚需在当前板上刷写、手机BLE配对、鼠标精度、断线释放和Android15–17各代表机型实测。板子回应done只证明执行完HID报告，手机目标要由画面另外验证。
+2026-10-12，当前COM5板已刷入BLE固件0.1.0并通过esptool写后校验；板上协议10项与生产主机通信2项检查通过，包括停止、心跳超时作废会话和关闭重连。原Flash完整备份已保留。
+
+尚需手机BLE配对、鼠标精度、实际输入与断线释放，以及Android15–17各代表机型实测。无手机时停止准确返回板上状态已清理、手机未连接，不声称手机收到释放报告。板子回应done只证明执行完HID报告，手机目标要由画面另外验证。

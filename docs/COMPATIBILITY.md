@@ -8,7 +8,7 @@
 
 | 芯片/配置 | 控制路线 | 证据与状态 |
 |---|---|---|
-| 当前连接：ESP32-D0WD-V3，revision v3.1，4MB Flash | BLE HID，电脑串口传输 | COM5 芯片与 Flash 已实测；esp32dev 固件构建通过，主机与模拟界面验证完成；尚未刷入，手机输入待验收 |
+| 当前连接：ESP32-D0WD-V3，revision v3.1，4MB Flash | BLE HID，电脑串口传输 | COM5 芯片与 Flash 已实测；esp32dev 固件构建、刷写及写后校验通过；10项板上协议与2项生产主机检查通过，手机输入待验收 |
 | 通用 ESP32 DevKit / WROOM（经典 ESP32） | BLE HID | 与当前芯片系列相同；商品板引脚、Flash 与供电仍需核对 |
 | ESP32-S3 / XIAO ESP32-S3 | 原生 USB HID | 计划目标；待固件构建与实机验证，必须使用原生 USB 接口 |
 | ESP32-S2 | 原生 USB HID | 芯片能力支持，待配置与实测 |

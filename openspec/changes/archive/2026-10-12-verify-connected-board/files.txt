@@ -1,0 +1,5 @@
+scripts/check_board_link.py
+README.md
+docs/COMPATIBILITY.md
+docs/BOARD-IDENTIFICATION.md
+docs/BLE-SETUP.md
