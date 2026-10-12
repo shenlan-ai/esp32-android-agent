@@ -58,6 +58,10 @@ python server/tests/firmware_demo.py --port 8892
 
 catalog 输出目录必须是新目录。缺可选工具/镜像时工作台仍可运行，向导显示安装说明。`--firmware-tool` / `ANDROID_AGENT_FIRMWARE_TOOL` 可以指向兼容协议的独立工具，`ANDROID_AGENT_FIRMWARE_DIR` 设置镜像目录。DEMO 使用临时目录和 memory-backed ROM，不打开真实串口、ADB 或模型；提供正常和断线两个模拟端口，结束时关闭进程。新增测试用真实 manager/worker 配合假 ROM，另用真实子进程验证超时/取消清理。独立工具 `tools/` 使用 GPL-2.0-or-later；应用只通过 JSON 子进程协议交互。便携构建检查主程序没有捆入 esptool、同时记录独立工具全部依赖、许可和对应源码；重建需同时安装 `server[build,firmware]`，从两份 `requirements-installed.txt` 恢复实际版本。
 
+独立工具直接使用esptool API时，必须先在同一ROM连接调用`attach_flash`初始化实际SPI接口，再读取容量与身份。CLI会执行这项准备，直接API不会自动补齐；遗漏会导致真实板容量未知而模拟可能通过。identify仍不加载stub或擦除/编程Flash，不能将旧容量或默认4MB填入未知结果。假ROM测试要求这个前置条件，备份与写入仍在同一连接复核身份。
+
+直接连接还必须设置锁定esptool版本的默认有限串口读取超时（默认3秒），避免命令恢复到无限等待后stub握手挂起；启动失败关闭连接，不自动重试。子进程总期限仍独立生效。假ROM测试覆盖有限超时与stub失败无备份、无Flash写入。
+
 ## 持续检查
 
 `.github/workflows/ci.yml` 在push、PR和手动运行时检查OpenSpec正式/归档规格与修改范围，运行Ubuntu/Windows × Python3.10/3.12测试、Node22坐标测试以及四个固件编译。Actions锁定官方commit，仓库权限只读，不使用手机、开发板、模型密钥或付费服务。

@@ -1,0 +1,11 @@
+## Decisions
+
+直接esptool API不执行CLI的全套准备。调用公开cmds.attach_flash(rom)使用芯片的实际SPI/eFuse配置，并验证连接，然后identity读取实际容量和MAC。它配置ROM控制器及临时SPI状态，不擦除/编程Flash；identify仍不运行stub。backup/write在同一连接初始化和复核身份后才加载stub，没有第二次连接或猜容量fallback。
+
+FakeApi在每次detect_chip时清除attached标记，attach_flash必须收到当前ROM；detect_flash_size要求标记已设置。既有全流程测试覆盖连接数量、stub和写入次数，另验证失败初始化不加载stub或开始备份/写入。实际识别失败保持拒绝，不使用旧检测结果绕过。
+
+## Validation
+
+实际备份首次在stub启动阶段失败；只读诊断确认直接detect_chip返回的串口读取timeout为None，command临时超时结束后恢复None，后续stub握手read可能无限等待。连接进入后即将rom._port.timeout设置为锁定esptool版本的loader.DEFAULT_TIMEOUT（默认3秒），供command恢复和裸读取使用；这是该版本公开连接对象内部串口的必要配置，不重连或重试stub。现有600秒备份/写入子进程总期限仍保留。Fake ROM具有timeout=None的串口并在run_stub检查有限正值；新增stub启动失败场景确认无输出、无写入并关闭连接。有限超时诊断的完整备份及生产向导备份分别记录，不将诊断文件当成向导ticket依据。
+
+独立工具unittest、针对性Ruff，真实COM5只读identify实际4MB及完整备份长度/SHA；后续新版固件写入在stabilize-ble-pointer-pacing中另行确认。本机备份含私密配置，不提交。严格OpenSpec与修改范围检查后归档。

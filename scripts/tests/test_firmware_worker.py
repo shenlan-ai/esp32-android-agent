@@ -41,6 +41,11 @@ class FakeApi:
         self.mac = (0x10, 0x20, 0x30, 0x40, 0x50, 0x60)
         self.memory = bytearray(b"\xa5" * flash_bytes)
         self.connected = False
+        self.attached = False
+        self.attach_calls = 0
+        self.fail_attach = False
+        self.fail_stub = False
+        self.loader = SimpleNamespace(DEFAULT_TIMEOUT=3)
         self.connections = 0
         self.stub_calls = 0
         self.write_calls = 0
@@ -55,12 +60,16 @@ class FakeApi:
     def detect_chip(self, *, port, baud, connect_attempts):
         self.connections += 1
         self.connected = True
+        self.attached = False
         self.rom = SimpleNamespace()
         # A ROM owns this physical memory and identity until it closes.
         parent = self
 
         class Rom:
             CHIP_NAME = "ESP32" if parent.family == "esp32" else "ESP32-S3"
+
+            def __init__(self):
+                self._port = SimpleNamespace(timeout=None)
 
             def __enter__(self):
                 return self
@@ -75,7 +84,10 @@ class FakeApi:
                 return "ESP32-D0WD-V3" if parent.family == "esp32" else "ESP32-S3"
 
             def run_stub(self):
+                assert self._port.timeout == parent.loader.DEFAULT_TIMEOUT
                 parent.stub_calls += 1
+                if parent.fail_stub:
+                    raise TimeoutError("No stub handshake response")
                 return self
 
             def change_baud(self, value):
@@ -87,8 +99,15 @@ class FakeApi:
         self.rom = Rom()
         return self.rom
 
-    def detect_flash_size(self, rom):
+    def attach_flash(self, rom):
         assert self.connected and rom is self.rom
+        self.attach_calls += 1
+        if self.fail_attach:
+            raise OSError("ROM SPI initialization failed")
+        self.attached = True
+
+    def detect_flash_size(self, rom):
+        assert self.connected and rom is self.rom and self.attached
         return f"{self.flash_bytes // 1048576}MB"
 
     def read_flash(self, rom, start, length, *, no_progress):
@@ -138,6 +157,19 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(report["identity"]["flash_bytes"], 4194304)
         self.assertEqual((self.api.connections, self.api.stub_calls, self.api.write_calls), (1, 0, 0))
         self.assertFalse(self.api.connected)
+        self.assertEqual(self.api.attach_calls, 1)
+
+    def test_flash_initialization_failure_does_not_load_stub_or_write(self):
+        self.api.fail_attach = True
+        for args in (["identify", "--port", "DEMO-COM"],
+                     ["backup", *self.identity, "--output", str(self.root / "failed.part")],
+                     self.write_args):
+            with self.assertRaisesRegex(OSError, "initialization"):
+                self.perform(args)
+            self.assertFalse(self.api.connected)
+        self.assertEqual((self.api.connections, self.api.attach_calls), (3, 3))
+        self.assertEqual((self.api.stub_calls, self.api.write_calls), (0, 0))
+        self.assertFalse((self.root / "failed.part").exists())
 
     def test_full_backup_uses_one_connection_and_hashes_actual_bytes(self):
         path = self.root / "new.part"
@@ -145,6 +177,17 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(), bytes(self.api.memory))
         self.assertEqual(result["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
         self.assertEqual((self.api.connections, self.api.stub_calls, self.api.write_calls), (1, 1, 0))
+
+    def test_stub_timeout_closes_without_backup_write_or_reconnection(self):
+        self.api.fail_stub = True
+        path = self.root / "stub-failed.part"
+        for args in (["backup", *self.identity, "--output", str(path)], self.write_args):
+            with self.assertRaisesRegex(TimeoutError, "handshake"):
+                self.perform(args)
+            self.assertFalse(self.api.connected)
+        self.assertEqual((self.api.connections, self.api.stub_calls), (2, 2))
+        self.assertEqual((self.api.write_calls, self.api.verify_calls), (0, 0))
+        self.assertFalse(path.exists())
 
     def test_wrong_mac_rejected_before_stub_and_flash_write(self):
         self.api.mac = (1, 2, 3, 4, 5, 6)

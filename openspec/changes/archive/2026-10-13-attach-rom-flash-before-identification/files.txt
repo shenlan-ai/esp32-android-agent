@@ -1,0 +1,4 @@
+tools/firmware_worker.py
+scripts/tests/test_firmware_worker.py
+docs/DEVELOPMENT.md
+openspec/specs/firmware-installation/spec.md

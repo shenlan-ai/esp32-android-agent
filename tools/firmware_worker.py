@@ -73,6 +73,10 @@ def perform(args, api) -> dict:
     # A disconnect cannot reopen a newly assigned COM port and replay a write.
     with api.detect_chip(port=args.port, baud=115200, connect_attempts=3) as rom:
         try:
+            # Direct detect_chip leaves pyserial's read timeout at None. Commands
+            # restore it before run_stub's raw handshake read, which must be bounded.
+            rom._port.timeout = api.loader.DEFAULT_TIMEOUT
+            api.cmds.attach_flash(rom)
             observed = identity(rom, api)
             if args.operation == "identify":
                 return {"ok": True, "protocol": PROTOCOL, "identity": observed}
