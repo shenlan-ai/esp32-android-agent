@@ -1,0 +1,16 @@
+AGENTS.md
+agent.md
+.gitignore
+README.md
+CONTRIBUTING.md
+LICENSE
+NOTICE
+docs/ARCHITECTURE.zh-CN.md
+docs/DEVELOPMENT.md
+openspec/config.yaml
+openspec/changes/archive/.gitkeep
+openspec/specs/.gitkeep
+openspec/specs/project-governance/spec.md
+openspec/specs/product-foundation/spec.md
+scripts/check_changes.py
+scripts/tests/test_check_changes.py

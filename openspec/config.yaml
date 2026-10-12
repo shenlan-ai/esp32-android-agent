@@ -1,0 +1,51 @@
+schema: spec-driven
+
+context: |
+  Language: zh-CN
+  All artifacts must be written in zh-CN.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  项目为本地运行的开源 Android 视觉 Agent，ESP32 HID 为主模式，ADB 提供体验和画面。
+  全部代码、固件、配置、文档及工具修改必须有对应变更和 files.txt 范围清单。
+  已授权按架构方案进行开发；常规实现无需重复审批。不可逆或超出范围的行为单独确认。
+  未实机验收的能力必须标注待验证。参考检出不属于产品运行依赖。
+
+rules:
+  proposal:
+    - 描述具体范围和受影响能力；行为不变时设置 skip_specs，不编造规格。
+  specs:
+    - 使用英文结构标题、SHALL/MUST 和四级 Scenario，每项需求包含可验证场景。
+  design:
+    - 写明关键边界、恢复行为、兼容性和可替代设计的取舍。
+  tasks:
+    - 每项任务必须包含完成条件和验证方式，完成后及时勾选。
+
+operations:
+  apply:
+    guidance:
+      - 实现前严格校验变更并准备 files.txt；验证范围使用 python scripts/check_changes.py。
+      - 先修改对应规格和设计再扩大实现范围；不修改参考检出。
+  archive:
+    guidance:
+      - 所有任务完成并写 validation.md 后归档；记录未执行验收，不能伪造证据。
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

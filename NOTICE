@@ -1,0 +1,7 @@
+This project is based on ideas and portions of esp32-iphone-agent:
+https://github.com/onehumanbeing/esp32-iphone-agent
+Reference commit: 27f36ce0f5d2d520ad5a45a0eea6eb99abbbe6f7
+Upstream copyright: Copyright (c) 2026 Henry Yuan
+Upstream license: MIT (see LICENSE)
+
+The local esp32-iphone-agent checkout is for reference and is not a runtime dependency.
