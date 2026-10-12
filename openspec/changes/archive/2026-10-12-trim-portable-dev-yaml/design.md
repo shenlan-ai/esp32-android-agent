@@ -1,0 +1,4 @@
+## Decision
+PyInstaller显式排除yaml；应用启动器固定使用uvicorn默认字典日志配置，不依赖YAML解析。贡献者脚本在包内源码zip中仍可以引用yaml，开发环境dev安装仍提供PyYAML。
+## Validation
+本机同时安装dev PyYAML的环境真实构建并检查requirements-installed.txt不含PyYAML，再解压运行完整smoke；Ruff与范围检查通过。无运行行为变化，不添加模拟实现单元测试。

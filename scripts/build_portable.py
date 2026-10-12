@@ -218,7 +218,7 @@ def build(output: Path, cache: Path, framework: Path) -> Path:
         args += ["--copy-metadata", name]
     for module in ("pytest", "_pytest", "IPython", "tkinter", "numpy", "matplotlib", "setuptools", "ruff", "PyInstaller",
                    "rich", "pygments", "wsproto", "websockets", "watchfiles", "gunicorn",
-                   "uvloop", "httptools", "trio", "orjson", "ujson", "brotli", "zstandard", "socksio"):
+                   "uvloop", "httptools", "trio", "orjson", "ujson", "brotli", "zstandard", "socksio", "yaml"):
         args += ["--exclude-module", module]
     # Dynamic backends are explicitly selected by launcher.py.
     args += ["--hidden-import", "uvicorn.logging", "--hidden-import", "uvicorn.loops.asyncio",
