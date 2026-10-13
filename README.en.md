@@ -2,6 +2,8 @@
 
 **Let a vision AI operate your real Android phone from your own computer.**
 
+[![CI](https://github.com/shenlan-ai/esp32-android-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/shenlan-ai/esp32-android-agent/actions/workflows/ci.yml)
+
 [简体中文](README.md) · [Quick start](#quick-start) · [Real phone examples](#real-phone-examples) · [Compatibility](docs/COMPATIBILITY.md) · [Contributing](CONTRIBUTING.md)
 
 An ESP32 sends keyboard and mouse input, ADB provides screenshots, and a vision model plans and verifies actions. The service runs locally with Python, FastAPI and static web assets. No Android companion app or root is required. **ADB control mode** lets you try it before buying a board.

@@ -2,6 +2,8 @@
 
 **在自己的电脑上，让视觉 AI 操作真实安卓手机。**
 
+[![CI](https://github.com/shenlan-ai/esp32-android-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/shenlan-ai/esp32-android-agent/actions/workflows/ci.yml)
+
 [English](README.en.md) · [快速开始](#快速开始) · [实机案例](#真实手机案例) · [兼容性](docs/COMPATIBILITY.md) · [贡献](CONTRIBUTING.md)
 
 ESP32 负责键鼠输入，ADB 提供手机画面，视觉模型负责规划、执行与核验。服务在本机运行，使用 Python + FastAPI + 静态网页；手机无需安装伴侣 App，也无需 root。没有开发板时，可以先用 **ADB 控制模式**体验。

@@ -9,4 +9,6 @@
 
 提交前读取git staged/unstaged与当前历史；现有改动为本项目历次已归档工作，本次一并提交最终工作树，不使用旧暂存活动变更残片。按明确项目文件/目录git add -A，排除参考/个人数据。配置origin为用户指定GitHub仓库，无force push；先在私有仓库push并验证提交，再根据已获明确授权改公开。若远端非空先获取/检查，不覆盖无关历史。不创建Release、发通知给第三方或改用户其他仓库。
 ## Validation
+公开页面发现 About 为空；按发布展示范围用 gh repo edit 添加事实性一句话描述和 android/esp32/vision-agent 等主题，不设置外部网站或更改其他仓库权限。
+首次远端 CI 完成后，将 CONTRIBUTING/DEVELOPMENT 里的“首次远端未运行”更新为有 run/commit 证据的实际状态，保留旧模拟/容器记录。准备变更在首次 push 时活动目录已入 Git；files.txt 显式覆盖自身旧目录，以便最终归档的删除与新归档证据一同通过相对首次提交的范围检查。
 检查中英事实一致、本地链接/图片存在与渲染、截图视觉质量/敏感区域、ignore正反样例、所有暂存文件及历史秘密/大文件；执行适用完整源码回归、Ruff、工具/Node/四板构建、OpenSpec全部/归档校验和范围检查。用户原始提交权限与目标仓库保持一致；远端main SHA==本地HEAD、visibility=PUBLIC、README与图片实际GitHub可读，工作树/剩余范围状态记录。

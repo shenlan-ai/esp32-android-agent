@@ -51,7 +51,7 @@ S3 的挑战认证、会话、心跳、取消、未知结果不重放、显式�
 
 最新本机开发便携包包含 BLE 0.1.4 / USB 0.1.2 与能力示例筛选；中文/空格路径的真实 exe smoke、四板 catalog、独立工具、缺 ADB 与端口冲突检查通过，382 源码 / 9 静态资源 / 16 镜像 / 4 冻结模块与构建快照一致。应用版本 0.1.0、dirty=true，尚非正式 GitHub 二进制 Release；产物与 SHA256 见[便携说明](PORTABLE.md)。
 
-macOS、Linux 原生桌面未验收。GitHub CI 配置 Ubuntu/Windows × Python 3.10/3.12、网页测试与四板构建；本地结果不能代替远端 CI。远端运行状态查看[Actions](https://github.com/shenlan-ai/esp32-android-agent/actions)，本次发布操作的实际核验写入 `prepare-github-publication` 验证记录。
+macOS、Linux 原生桌面未验收。2026-10-13 公开源码提交 `0097e23` 的 [GitHub CI run 38384089654](https://github.com/shenlan-ai/esp32-android-agent/actions/runs/38384089654) 在公开后重试成功：10 个 job 全部通过，Ubuntu/Windows × Python 3.10/3.12 各 300 服务端测试、无 skip、1 依赖 warning，另有 5 网页测试、四板构建、59 工具测试及 OpenSpec 治理检查。便携构建工作流尚未远程运行。最新状态查看[Actions](https://github.com/shenlan-ai/esp32-android-agent/actions)，实际发布核验写入 `prepare-github-publication` 验证记录；该远端证据不能代替其他设备的输入验收。
 
 ## 历史问题与未执行项
 

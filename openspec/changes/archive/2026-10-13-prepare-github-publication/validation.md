@@ -24,3 +24,11 @@
 - 以全部零 before SHA 运行 `scripts/ci_base.py --event push --before 0000000000000000000000000000000000000000` 得到真实空树；`scripts/check_changes.py --base 4b825dc642cb6eb9a060e54bf8d69288fbee4904`：393 文件范围通过，符合首次 GitHub push 检查条件。
 - 明确项目文件/目录 `git add -A` 收集最终工作树，移除旧暂存的已归档活动变更残片。208 个 staged 文件只含项目源码/文档/规格；唯一活动目录为本准备变更，两图片与来源说明已纳入。
 - `git -c core.safecrlf=false diff --cached --check` 与 `git diff --exit-code` 通过。远端在提交前再次确认 PRIVATE、isEmpty=true；没有需要覆盖的远端历史。
+## 实际公开与远端验证
+- 发布提交 `0097e23412d2528b09dd052a4035d97e25c8539d`：208 文件，关联20个OpenSpec变更。添加指定 HTTPS origin 后无 force push 到 main；`git rev-parse HEAD` 与 `git ls-remote origin refs/heads/main` 同 SHA。
+- 按用户“改为公开开源，推送后通知我”执行 `gh repo edit shenlan-ai/esp32-android-agent --visibility public --accept-visibility-change-consequences`，CLI 与真实网页均确认 PUBLIC、默认 main。补 About 一句话事实描述和7个匹配主题，未改变其他权限。
+- 无凭据 HTTP 检查：仓库、两 README 与两图片均 HTTP 200，raw 内容与本地一致。GitHub 真实页面两图 naturalWidth/Height正确、complete=true，三表格及 Mermaid 架构图实际渲染通过；未上传原始图片/配置。
+- `Continuous validation` run https://github.com/shenlan-ai/esp32-android-agent/actions/runs/38384089654：首次 attempt1 在私有状态下0步骤，被GitHub账户计费限制拦截，不是源码测试失败。仓库公开后仅重试一次（`gh run rerun ... --failed`），attempt2 completed/success，全部10个job成功。
+- 远端日志实际证据：Ubuntu/Windows × Python3.10/3.12各300 passed、0skip、1依赖warning；全源码Ruff与CI base测试通过；Node22五项网页测试、四板构建、59工具测试及真实共享C++、17活动+正式检查/35归档检查、首次push空树范围检查均成功。首次远端证据已写入贡献/开发/兼容说明，并加真实CI状态徽章。
+- 不创建Tag、GitHub Release或上传旧dirty二进制包；portable工作流未远程执行，继续明确标待验证。没有发送外部通知，最终仅在本聊天通知用户。
+- 归档前所有任务完成；归档只处理本变更，正式规格不变。归档证据随后作为第二提交推送，再由工具核对最终SHA/clean与新的CI状态，不事后修改归档历史。

@@ -9,3 +9,6 @@ docs/EXAMPLES.md
 docs/COMPATIBILITY.md
 docs/PORTABLE.md
 docs/images/*
+CONTRIBUTING.md
+docs/DEVELOPMENT.md
+openspec/changes/prepare-github-publication/*
