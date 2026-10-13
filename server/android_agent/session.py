@@ -4,7 +4,7 @@ import asyncio
 
 from .ble import BleController, Calibration, PointerProbe, SerialBridge, normalize_firmware
 from .controller import AdbController
-from .errors import DeviceError
+from .errors import DeviceError, ScreenError, StaleFrameError
 from .models import Action
 from .screen import AdbScreen, Frame, validate_decision
 from .usb import UsbController
@@ -17,6 +17,7 @@ class DeviceSession:
         self.serial: str | None = None
         self._lock = asyncio.Lock()
         self._epoch = 0
+        self._input_revision = 0
         self._active: asyncio.Task | None = None
         self._stop_lock = asyncio.Lock()
         self._stopping = False
@@ -137,6 +138,7 @@ class DeviceSession:
                 raise DeviceError("Calibration firmware differs from the connected board; recalibrate")
             saved = calibration.model_copy(update={"firmware": firmware})
             self.controller.calibration = saved
+            self._epoch += 1
             return saved
 
     async def locate(self, probe: PointerProbe) -> dict:
@@ -150,6 +152,7 @@ class DeviceSession:
                 raise DeviceError("HID calibration operation cancelled or unavailable")
             self._active = asyncio.current_task()
             try:
+                self._input_revision += 1
                 return await self.controller.locate(probe)
             except asyncio.CancelledError:
                 if epoch != self._epoch:
@@ -158,10 +161,39 @@ class DeviceSession:
             finally:
                 self._active = None
 
-    async def execute(self, action: Action, frame: Frame | None = None) -> dict:
+    @property
+    def observation_binding(self) -> tuple[int, int]:
+        return self._epoch, self._input_revision
+
+    async def observe(self) -> tuple[Frame, tuple[int, int]]:
+        """Capture with the same lock/cancellation rules as input, without task takeover."""
+        self._guard_maintenance()
+        epoch = self._epoch
+        async with self._lock:
+            self._guard_maintenance()
+            if self._stopping or epoch != self._epoch:
+                raise DeviceError("Observation cancelled by stop; observe again")
+            self._active = asyncio.current_task()
+            try:
+                try:
+                    frame = await self.screen.capture(force=True)
+                except DeviceError:
+                    raise ScreenError("Screen unavailable; restore the phone connection and observe again") from None
+                return frame, self.observation_binding
+            except asyncio.CancelledError:
+                if epoch != self._epoch:
+                    raise DeviceError("Observation cancelled by stop; observe again") from None
+                raise
+            finally:
+                self._active = None
+
+    async def execute(self, action: Action, frame: Frame | None = None, *,
+                      reference: Frame | None = None, binding: tuple[int, int] | None = None,
+                      on_submit=None) -> dict:
         epoch = self._epoch
         try:
-            result, _ = await self._execute(action, frame)
+            result, _ = await self._execute(action, frame, reference=reference,
+                                           binding=binding, on_submit=on_submit)
             return result
         except asyncio.CancelledError:
             if epoch != self._epoch:
@@ -174,7 +206,7 @@ class DeviceSession:
 
     async def _execute(self, action: Action, frame: Frame | None = None,
                        owner=None, reference: Frame | None = None,
-                       on_submit=None) -> tuple[dict, Frame]:
+                       on_submit=None, binding: tuple[int, int] | None = None) -> tuple[dict, Frame]:
         def guard():
             self._guard_maintenance()
             if owner is None:
@@ -189,11 +221,18 @@ class DeviceSession:
             guard()
             if epoch != self._epoch:
                 raise DeviceError("Operation cancelled by stop or device change")
+            if binding is not None and binding != self.observation_binding:
+                raise StaleFrameError("Observation invalidated by input or session change; observe again")
             if not self.controller:
                 raise DeviceError("Select a device first")
             self._active = asyncio.current_task()
             try:
-                current = frame or await self.screen.capture(force=True)
+                try:
+                    current = frame or await self.screen.capture(force=True)
+                except DeviceError:
+                    if binding is not None:
+                        raise ScreenError("Screen unavailable; restore the phone connection and observe again") from None
+                    raise
                 if current.serial != self.serial:
                     raise DeviceError("Screen does not belong to the selected device")
                 if reference:
@@ -210,6 +249,7 @@ class DeviceSession:
                         self.controller.stroke_args(action, current)
                 if on_submit:
                     on_submit(current)
+                self._input_revision += 1
                 timing = await self.controller.execute(action, current)
                 result = {"ok": True, "action": action.action, "frame_id": current.id}
                 if timing:

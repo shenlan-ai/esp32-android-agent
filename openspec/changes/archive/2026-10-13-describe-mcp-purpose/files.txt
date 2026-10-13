@@ -1,0 +1,1 @@
+openspec/specs/mcp-device-tools/spec.md

@@ -1,0 +1,10 @@
+server/android_agent/static/index.html
+server/android_agent/static/style.css
+server/android_agent/static/app.js
+server/android_agent/static/console.js
+server/android_agent/static/i18n.js
+server/tests/console.test.mjs
+server/tests/agent_demo.py
+scripts/check_console_ui.mjs
+docs/design/console-2026-10-13/*
+openspec/specs/console-presentation/spec.md

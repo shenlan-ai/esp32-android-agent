@@ -76,7 +76,9 @@ def create_demo():
     @app.get("/")
     async def index():
         banner = '<section class="access"><strong>DEMO 离线模拟：不连接真实手机、开发板或模型服务</strong><a href="/demo/reset">重置模拟手机</a><a href="/demo/slow">慢请求模式</a><a href="/demo/fast">正常速度</a></section>'
-        return HTMLResponse(app_module.index_html().replace("<main>", banner + "<main>"))
+        return HTMLResponse(app_module.index_html().replace(
+            '<main id="console-main">', banner + '<main id="console-main">'
+        ))
 
     @app.get("/demo/reset")
     async def reset():

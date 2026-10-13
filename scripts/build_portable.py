@@ -20,7 +20,7 @@ from packaging.requirements import Requirement
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ("fastapi", "uvicorn", "httpx", "pillow", "pydantic", "pyserial")
 SOURCE_ROOTS = {"server", "hardware", "scripts", "packaging", "docs", "openspec", ".github", "tools"}
-SOURCE_FILES = {"README.md", "README.en.md", "LICENSE", "NOTICE", "AGENTS.md", "agent.md",
+SOURCE_FILES = {"README.md", "README.en.md", "README.zh-CN.md", "LICENSE", "NOTICE", "AGENTS.md", "agent.md",
                 "CONTRIBUTING.md", ".env.example", ".gitignore"}
 
 

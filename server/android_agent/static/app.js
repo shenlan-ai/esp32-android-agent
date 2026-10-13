@@ -4,6 +4,7 @@ import { createTaskView } from './tasks.js';
 import { createUsbSetup } from './usb.js';
 import { createFirmwareSetup } from './firmware.js';
 import { boardStatusKey } from './board-status.js';
+import { createConsoleView } from './console.js';
 
 const $ = id => document.getElementById(id);
 let language = 'zh', token = '', csrf = '', status = null, frameId = null, blobUrl = '';
@@ -15,6 +16,7 @@ function translate() {
   document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
   for (const role of ['actor', 'planner']) {
     const el = $(`${role}-key-status`);
     if (el.dataset.keySet !== undefined) el.textContent = t(el.dataset.keySet === 'true' ? 'keySaved' : 'keyMissing');
@@ -36,6 +38,7 @@ async function api(path, body) {
 }
 async function guarded(work) { try { return await work(); } catch (error) { message(error.message); return null; } }
 const tasks = createTaskView({element:$,translate:t,api,headers,guarded,message});
+const consoleView = createConsoleView({document, translate:t, location:window.location, history:window.history});
 async function refreshDevices() {
   const data = await api('/api/devices');
   $('device-select').replaceChildren(new Option(t('chooseDevice'), ''), ...data.devices.map(device => {
@@ -54,6 +57,7 @@ async function refreshBoards() {
 async function loadSettings() {
   const prefs = await api('/api/settings');
   tasks.settings(prefs);
+  consoleView.settings(prefs);
   displayCalibration(prefs);
   for (const role of ['actor', 'planner']) {
     $(`${role}-base`).value = prefs[role].base_url;
@@ -85,7 +89,11 @@ async function saveSettings() {
 }
 function hideFrame(detail) {
   frameId = null; $('live').removeAttribute('src'); $('screen-hint').hidden = false;
-  if (detail) $('screen-hint').querySelector('p').textContent = detail;
+  const heading = $('screen-hint').querySelector('strong'), help = $('screen-hint').querySelector('p');
+  heading.dataset.i18n = detail ? 'screenUnavailable' : 'screenEmpty';
+  heading.textContent = t(heading.dataset.i18n);
+  if (detail) { delete help.dataset.i18n; help.textContent = detail; }
+  else { help.dataset.i18n = 'screenHelp'; help.textContent = t('screenHelp'); }
   if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = ''; }
 }
 async function refreshFrame() {
@@ -109,6 +117,7 @@ async function poll() {
     if (csrf) {
       status = await api('/api/status');
       $('connection-state').textContent = t('connected');
+      $('connection-state').dataset.service = 'connected';
       $('mode-label').textContent = status.serial ? `${status.mode.toUpperCase()} · ${status.serial}` : t('noSelection');
       const board = status.board;
       $('board-status').textContent = t(boardStatusKey(status)) + (board && !board.connected && board.error ? ` ${board.error}` : '');
@@ -117,8 +126,9 @@ async function poll() {
       firmware.status(status);
       document.querySelectorAll('[data-action]').forEach(button => { button.disabled = !status.capabilities.includes(button.dataset.action); });
       tasks.status(status);
+      consoleView.status(status);
     }
-  } catch (error) { $('connection-state').textContent = error.message; }
+  } catch (error) { $('connection-state').textContent = error.message; $('connection-state').dataset.service = 'error'; }
   setTimeout(poll, 1000);
 }
 async function initialize() {
@@ -128,6 +138,7 @@ async function initialize() {
   await guarded(refreshDevices);
   await guarded(refreshBoards);
   firmware.status(status); usb.status(status); tasks.status(status);
+  consoleView.status(status);
   await tasks.refresh(); tasks.events();
 }
 async function sendAction(action) {
@@ -206,7 +217,7 @@ $('settings-form').addEventListener('submit', event => { event.preventDefault();
 async function stop() { const result = await api('/api/stop', {}); message(t('stopped') + result.release + (result.firmware_in_progress ? '\n' + t('fwStopContinues') : ''), true); }
 $('emergency-stop').addEventListener('click', () => guarded(stop));
 document.addEventListener('keydown', event => { if (event.key === 'Escape') guarded(stop); });
-$('language').addEventListener('click', () => { language = language === 'zh' ? 'en' : 'zh'; try { localStorage.setItem('language',language); } catch { /* optional */ } translate(); tasks.translated(); usb.translated(); firmware.translated(); });
+$('language').addEventListener('click', () => { language = language === 'zh' ? 'en' : 'zh'; try { localStorage.setItem('language',language); } catch { /* optional */ } translate(); consoleView.translated(); tasks.translated(); usb.translated(); firmware.translated(); });
 $('access-login').addEventListener('click', () => guarded(async () => { token = $('access-token').value; try { sessionStorage.setItem('access-token',token); } catch { /* optional */ } await initialize(); }));
 const usb = createUsbSetup({ api, guarded, t, message, onMode:async () => {
   status = await api('/api/status'); displayCalibration(await api('/api/settings'));

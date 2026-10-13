@@ -1,5 +1,9 @@
 export const messages = {
   zh: {
+    workspace:"工作台", workspaceHelp:"观察手机，执行任务。", consoleNavigation:"控制台", skipToWorkspace:"跳转到工作区", localService:"本机运行",
+    connectionHelp:"选择手机，确认画面与控制方式。", settingsHelp:"连接视觉模型，设置任务的运行边界。",
+    taskTitle:"让手机完成一件事", currentTask:"当前任务", taskEmpty:"尚未开始任务", taskEmptyHelp:"输入目标，开始后在这里查看每一步的执行与核验。",
+    configureModel:"配置视觉模型", keyboardTools:"按键与输入说明", screenUnavailable:"手机画面不可用",
     fwSetup:"安装或更新开发板固件", fwIntro:"先停止任务并切到 ADB 控制。使用数据线将开发板接到电脑，选择上方串口。识别会复位板子。",
     fwToolMissing:"刷写工具未安装。使用 Windows 便携包，或在源码目录安装 pip install -e \"./server[firmware]\"。",
     fwCatalogMissing:"未找到固件镜像。便携包已内置；源码运行请先生成镜像目录，再用 --firmware-dir 指定。",
@@ -44,7 +48,7 @@ export const messages = {
     boardReady:"HID 已连接，鼠标已校准。请先手动验证点击和输入。", actionUnavailable:"当前控制方式不支持此动作；请检查连接和鼠标校准。",
     modeSelected:"已选择控制方式", calibrationNeedsScreen:"先选择手机并获取当前画面，再保存校准。",
     tagline:"在自己的电脑上，让 AI 操作真实安卓手机", accessToken:"访问令牌", connect:"连接", phoneScreen:"手机画面",
-    screenEmpty:"先连接一台手机", screenHelp:"在右侧刷新设备列表，解锁手机并允许 USB 调试，然后选择设备。",
+    screenEmpty:"先连接一台手机", screenHelp:"在设备连接中刷新列表，解锁手机并允许 USB 调试，然后选择设备。",
     gestureHelp:"点击点按，拖动滑动，按住长按，滚轮滚动。", emergencyStop:"紧急停止", stopHelp:"也可按 Esc。停止会取消待执行动作并释放输入。",
     home:"主页", back:"返回", recents:"最近任务", textInput:"输入文字", type:"输入", keyInput:"按键", pressKey:"按键",
     asciiHelp:"基础模式支持 ASCII。中文输入需要可选输入法扩展。", connection:"设备连接", refreshDevices:"刷新设备", chooseDevice:"选择手机", selectDevice:"连接设备",
@@ -59,6 +63,10 @@ export const messages = {
     paired:"配对成功。请填写无线调试页面的连接地址。", stopped:"已停止；释放状态：", selected:"设备已连接", noServices:"未发现无线服务。可手动填写地址。", idle:"待命",
   },
   en: {
+    workspace:"Workspace", workspaceHelp:"Observe your phone. Run a task.", consoleNavigation:"Console", skipToWorkspace:"Skip to workspace", localService:"Runs locally",
+    connectionHelp:"Choose a phone and verify capture and control.", settingsHelp:"Connect a vision model and set task limits.",
+    taskTitle:"Give your phone a task", currentTask:"Current task", taskEmpty:"No task yet", taskEmptyHelp:"Enter a goal to see each action and its verification here.",
+    configureModel:"Configure a vision model", keyboardTools:"Keys & input help", screenUnavailable:"Phone capture unavailable",
     fwSetup:"Install or update board firmware", fwIntro:"Stop the task and switch to ADB control. Connect the board to this computer with a data cable and select its serial port above. Identification resets the board.",
     fwToolMissing:'Firmware tool missing. Use the Windows portable package, or run pip install -e "./server[firmware]" in the source checkout.',
     fwCatalogMissing:"Firmware images missing. They are included in the portable package. For source use, build a catalog and set --firmware-dir.",
@@ -103,7 +111,7 @@ export const messages = {
     boardReady:"HID connected and mouse calibrated. Verify clicks and typing manually first.", actionUnavailable:"Action unavailable for this mode. Check connection and calibration.",
     modeSelected:"Control mode selected", calibrationNeedsScreen:"Select a phone and obtain the current screen before saving calibration.",
     tagline:"Let AI operate a real Android phone from your computer", accessToken:"Access token", connect:"Connect", phoneScreen:"Phone screen",
-    screenEmpty:"Connect a phone to begin", screenHelp:"Refresh devices, unlock your phone, allow USB debugging, then select it.",
+    screenEmpty:"Connect a phone to begin", screenHelp:"Open Device connection, refresh devices, unlock your phone and allow USB debugging, then select it.",
     gestureHelp:"Click to tap, drag to swipe, hold to long press, use the wheel to scroll.", emergencyStop:"Emergency stop", stopHelp:"Or press Esc. Stop cancels pending actions and releases input.",
     home:"Home", back:"Back", recents:"Recents", textInput:"Input text", type:"Type", keyInput:"Key", pressKey:"Press key",
     asciiHelp:"Basic input supports ASCII. Unicode needs an optional input method.", connection:"Device connection", refreshDevices:"Refresh devices", chooseDevice:"Choose a phone", selectDevice:"Select device",

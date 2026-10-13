@@ -15,12 +15,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "ruff>=0.9,<1", "PyYAML==6.0.3"]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "ruff>=0.9,<1", "PyYAML==6.0.3", "mcp==1.30.0"]
+mcp = ["mcp==1.30.0"]
 build = ["PyInstaller==6.16.0"]
 firmware = ["esptool==5.3.0"]
 
 [project.scripts]
 android-agent = "android_agent.__main__:main"
+android-agent-mcp = "android_agent.mcp:main"
 
 [tool.setuptools]
 packages = ["android_agent"]

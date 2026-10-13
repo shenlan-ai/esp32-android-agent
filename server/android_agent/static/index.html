@@ -7,9 +7,20 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+  <a class="skip-link" href="#workspace-title" data-i18n="skipToWorkspace">跳转到工作区</a>
+  <aside class="app-nav">
+    <a class="brand" href="/" aria-label="ESP32 Android Agent"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 17h2"/></svg></span><span>Android Agent<small>ESP32</small></span></a>
+    <nav aria-label="控制台" data-i18n-aria="consoleNavigation">
+      <button type="button" data-console-view="workspace" aria-controls="task-panel" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/></svg><span data-i18n="workspace">工作台</span></button>
+      <button type="button" data-console-view="devices" aria-controls="device-panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 14 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 1 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></svg><span data-i18n="connection">设备连接</span></button>
+      <button type="button" data-console-view="settings" aria-controls="settings-panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span data-i18n="modelSettings">模型与运行设置</span></button>
+    </nav>
+    <div class="nav-foot"><span class="local-mark" aria-hidden="true"></span><span data-i18n="localService">本机运行</span></div>
+  </aside>
+  <div class="app-shell">
   <header class="app-header">
-    <div><h1>ESP32 Android Agent</h1><p data-i18n="tagline">在自己的电脑上，让 AI 操作真实安卓手机</p></div>
-    <div class="header-tools"><span id="connection-state" role="status">连接服务中…</span><button id="language" type="button">English</button></div>
+    <div><h1 id="workspace-title" tabindex="-1" data-i18n="workspace">工作台</h1><p id="workspace-description" data-i18n="workspaceHelp">观察手机，执行任务。</p></div>
+    <div class="header-tools"><span id="connection-state" role="status" data-service="pending">连接服务中…</span><button id="language" type="button">English</button><button id="emergency-stop" class="stop-button"><span class="stop-mark" aria-hidden="true"></span><span data-i18n="emergencyStop">紧急停止</span><kbd>Esc</kbd></button></div>
   </header>
   <div id="message" role="alert" hidden></div>
   <section id="access-section" class="access" hidden>
@@ -17,29 +28,25 @@
     <input id="access-token" type="password" autocomplete="off">
     <button id="access-login" data-i18n="connect">连接</button>
   </section>
-  <main>
+  <main id="console-main">
     <aside class="device-pane">
       <div class="pane-title"><h2 data-i18n="phoneScreen">手机画面</h2><span id="mode-label">未选择设备</span></div>
       <div class="screen-stage">
         <img id="live" alt="手机实时画面" draggable="false">
-        <div id="screen-hint"><strong data-i18n="screenEmpty">先连接一台手机</strong><p data-i18n="screenHelp">在右侧刷新设备列表，解锁手机并允许 USB 调试，然后选择设备。</p></div>
+        <div id="screen-hint"><svg class="empty-device" viewBox="0 0 48 48" aria-hidden="true"><rect x="13" y="5" width="22" height="38" rx="4"/><path d="M21 35h6"/></svg><strong data-i18n="screenEmpty">先连接一台手机</strong><p data-i18n="screenHelp">在设备连接中刷新列表，解锁手机并允许 USB 调试，然后选择设备。</p><button type="button" data-console-view="devices" data-i18n="connection">设备连接</button></div>
       </div>
-      <p class="helper" data-i18n="gestureHelp">点击点按，拖动滑动，按住长按，滚轮滚动。</p>
-      <button id="emergency-stop" class="stop-button" data-i18n="emergencyStop">紧急停止</button>
-      <p class="helper" data-i18n="stopHelp">也可按 Esc。停止会取消待执行动作并释放输入。</p>
       <div class="manual-actions">
         <button data-action="home" data-i18n="home">主页</button>
         <button data-action="back" data-i18n="back">返回</button>
         <button data-action="recents" data-i18n="recents">最近任务</button>
       </div>
       <form id="text-form" class="row"><label class="sr-only" for="input-text" data-i18n="textInput">输入文字</label><input id="input-text" autocomplete="off" placeholder="ASCII text"><button data-i18n="type">输入</button></form>
-      <form id="key-form" class="row"><label class="sr-only" for="input-key" data-i18n="keyInput">按键</label><select id="input-key"><option value="enter">Enter</option><option value="backspace">Backspace</option><option value="esc">Esc</option><option value="tab">Tab</option><option value="space">Space</option><option value="up">↑</option><option value="down">↓</option><option value="left">←</option><option value="right">→</option></select><button data-i18n="pressKey">按键</button></form>
-      <p class="helper" data-i18n="asciiHelp">基础模式支持 ASCII。中文输入需要可选输入法扩展。</p>
+      <details class="keyboard-tools"><summary data-i18n="keyboardTools">按键与输入说明</summary><p class="helper" data-i18n="gestureHelp">点击点按，拖动滑动，按住长按，滚轮滚动。</p><form id="key-form" class="row"><label class="sr-only" for="input-key" data-i18n="keyInput">按键</label><select id="input-key"><option value="enter">Enter</option><option value="backspace">Backspace</option><option value="esc">Esc</option><option value="tab">Tab</option><option value="space">Space</option><option value="up">↑</option><option value="down">↓</option><option value="left">←</option><option value="right">→</option></select><button data-i18n="pressKey">按键</button></form><p class="helper" data-i18n="asciiHelp">基础模式支持 ASCII。中文输入需要可选输入法扩展。</p><p class="helper" data-i18n="stopHelp">也可按 Esc。停止会取消待执行动作并释放输入。</p></details>
     </aside>
 
     <div class="workspace">
-      <section class="setup-section">
-        <div class="section-title"><h2 data-i18n="connection">设备连接</h2><button id="refresh-devices" data-i18n="refreshDevices">刷新设备</button></div>
+      <section class="setup-section console-panel" id="device-panel" data-panel="devices" aria-labelledby="device-title" hidden>
+        <div class="section-title"><h2 id="device-title" class="sr-only" data-i18n="connection">设备连接</h2><button id="refresh-devices" data-i18n="refreshDevices">刷新设备</button></div>
         <p id="device-diagnostic" class="helper"></p>
         <div class="row"><label class="sr-only" for="device-select" data-i18n="chooseDevice">选择手机</label><select id="device-select"><option value="">选择手机</option></select><button id="select-device" class="primary" data-i18n="selectDevice">连接设备</button></div>
         <details><summary data-i18n="wirelessSetup">无线连接与配对</summary>
@@ -86,14 +93,21 @@
         </details>
       </section>
 
-      <section class="task-section">
-        <div class="section-title"><h2 data-i18n="task">任务</h2><span id="task-state">待命</span></div>
+      <section class="task-section console-panel" id="task-panel" data-panel="workspace" aria-labelledby="task-title">
+        <div class="task-composer">
+        <div class="section-title"><h2 id="task-title" data-i18n="taskTitle">让手机完成一件事</h2></div>
         <label class="sr-only" for="goal" data-i18n="goal">操作目标</label>
         <textarea id="goal" rows="3" data-i18n-placeholder="goalPlaceholder" placeholder="打开设置，进入 Wi-Fi 页面"></textarea>
-        <div class="row"><button id="run-task" class="primary" disabled data-i18n="startTask">开始任务</button><button id="pause-task" disabled data-i18n="takeover">暂停并接管</button><button id="resume-task" disabled data-i18n="resume">继续任务</button><button id="clear-task" disabled data-i18n="clear">清空记录</button></div>
+        <div class="row"><button id="run-task" class="primary" disabled data-i18n="startTask">开始任务</button><button id="pause-task" disabled data-i18n="takeover">暂停并接管</button><button id="resume-task" disabled data-i18n="resume">继续任务</button></div>
         <p id="task-help" class="helper" data-i18n="taskHelp">先确认手动控制正常并保存视觉模型配置。每步执行后核验画面，结果不确定时暂停。</p>
+        <button class="model-link" type="button" data-console-view="settings"><span class="model-icon" aria-hidden="true"></span><span id="model-summary" data-i18n="configureModel">配置视觉模型</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+        </div>
+        <div class="task-activity">
+        <div class="section-title"><h2 data-i18n="currentTask">当前任务</h2><span id="task-state" role="status">待命</span></div>
+        <div id="task-empty" class="empty-task"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 5h15l8 8v30H11V8a3 3 0 0 1 3-3Z"/><path d="M28 5v10h9M18 23h12M18 30h8"/></svg><strong data-i18n="taskEmpty">尚未开始任务</strong><p data-i18n="taskEmptyHelp">输入目标，开始后在这里查看每一步的执行与核验。</p></div>
         <p id="task-reason" role="status"></p>
         <p id="task-usage" class="helper"></p>
+        <button id="clear-task" disabled data-i18n="clear">清空记录</button>
         <button id="export-task" type="button" hidden data-i18n="exportTask">导出当前任务</button>
         <details id="plan-section" hidden open><summary data-i18n="plan">当前计划</summary><p id="plan-text"></p></details>
         <ol id="steps" class="steps"></ol>
@@ -102,9 +116,10 @@
           <ul id="history-list" class="service-list"></ul>
           <div id="history-detail"></div>
         </details>
+        </div>
       </section>
 
-      <details class="settings-section" open><summary data-i18n="modelSettings">模型与运行设置</summary>
+      <section class="settings-section console-panel" id="settings-panel" data-panel="settings" aria-labelledby="settings-title" hidden><h2 id="settings-title" class="sr-only" data-i18n="modelSettings">模型与运行设置</h2>
         <p class="helper" data-i18n="modelHelp">支持 OpenAI 兼容视觉模型。手动操作不需要模型；规划模型留空时共用执行模型。</p>
         <form id="settings-form">
           <fieldset><legend data-i18n="actor">执行模型</legend><div class="fields"><label><span data-i18n="baseUrl">API 地址</span><input id="actor-base" type="url" required></label><label><span data-i18n="modelName">模型名称</span><input id="actor-model" autocomplete="off"></label><label><span>API Key</span><input id="actor-key" type="password" autocomplete="off"><small id="actor-key-status"></small></label></div><label class="checkbox"><input id="actor-clear-key" type="checkbox"><span data-i18n="clearKey">清除已保存密钥</span></label>
@@ -115,10 +130,11 @@
           <label class="checkbox"><input id="save-screenshots" type="checkbox"><span data-i18n="saveScreenshots">在本机保存任务截图</span></label>
           <div class="row"><button class="primary" data-i18n="saveSettings">保存设置</button><button id="test-model" type="button" disabled data-i18n="testModel">测试模型</button></div>
         </form>
-      </details>
+      </section>
     </div>
   </main>
   <footer><span data-i18n="localFooter">本机服务 · 手机画面仅发送到你配置的模型服务</span><span id="version"></span></footer>
+  </div>
   <script type="module" src="/static/app.js"></script>
 </body>
 </html>

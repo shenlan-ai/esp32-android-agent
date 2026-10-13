@@ -28,11 +28,12 @@ from .ble import (
     serial_ports,
 )
 from .config import ConfigStore, PreferencesUpdate, RuntimeSettings
-from .errors import AgentError
+from .errors import AgentError, ScreenError, StaleFrameError
 from .firmware import FirmwareManager
 from .firmware_routes import register_firmware_routes
 from .history import EventBus, TraceStore
 from .llm import ModelClient, ModelProtocolError, parse_object
+from .mcp_api import ObservationStore, register_mcp_routes
 from .models import Action
 from .provision import UsbProvision, provision_board
 from .screen import AdbScreen
@@ -88,6 +89,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
         client = adb or AdbClient(runtime.adb_path, runtime.command_timeout)
         app.state.adb = client
         app.state.session = DeviceSession(client, AdbScreen(client, runtime.preview_interval))
+        app.state.mcp_observations = ObservationStore()
         # Remember the selection, but do not assume it is still online or authorized.
         if app.state.preferences.serial:
             try:
@@ -131,6 +133,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
 
     app = FastAPI(title="ESP32 Android Agent", version=__version__, lifespan=lifespan)
     register_firmware_routes(app, lambda: serial_ports())
+    register_mcp_routes(app)
 
     @app.middleware("http")
     async def access(request: Request, call_next):
@@ -168,7 +171,11 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
         return response
 
     @app.exception_handler(AgentError)
-    async def agent_error(_, exc):
+    async def agent_error(request, exc):
+        if request.url.path.startswith("/api/mcp/"):
+            code = ("stale_observation" if isinstance(exc, StaleFrameError) else
+                    "screen_unavailable" if isinstance(exc, ScreenError) else "device_unavailable")
+            return JSONResponse({"code": code, "detail": "Refresh observation and check device readiness"}, 409)
         return JSONResponse({"detail": str(exc)}, 409)
 
     @app.exception_handler(RequestValidationError)
@@ -376,6 +383,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
 
     @app.post("/api/stop")
     async def stop():
+        app.state.mcp_observations.frames.clear()
         if app.state.model_probe and not app.state.model_probe.done():
             app.state.model_probe.cancel()
             await asyncio.gather(app.state.model_probe, return_exceptions=True)

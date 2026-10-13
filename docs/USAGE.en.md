@@ -1,6 +1,6 @@
 # Using ESP32 Android Agent
 
-[Project overview](../README.en.md) · [中文自动任务说明](AGENT-USAGE.md)
+[Project overview](../README.md) · [简体中文](../README.zh-CN.md) · [中文自动任务说明](AGENT-USAGE.md)
 
 ## Start the workbench
 

@@ -1,0 +1,7 @@
+README.md
+README.en.md
+README.zh-CN.md
+CONTRIBUTING.md
+docs/DEVELOPMENT.md
+docs/USAGE.en.md
+scripts/build_portable.py

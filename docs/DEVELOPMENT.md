@@ -66,6 +66,8 @@ catalog 输出目录必须是新目录。缺可选工具/镜像时工作台仍�
 
 ## 持续检查
 
+MCP桥接与真实SDK/stdio协议测试由`./server[dev]`同时安装固定SDK1.30.0；普通用户单独选择`./server[mcp]`，核心`./server`不增加SDK。测试入口：`python -m pytest -q server/tests/test_mcp.py server/tests/test_mcp_api.py`。DEMO和真实Codex配置见 [MCP说明](MCP.md)，真实客户端/手机结果必须与模拟证据分开记录，不能通过自写客户端声称Codex已看见图片。
+
 `.github/workflows/ci.yml` 在push、PR和手动运行时检查OpenSpec正式/归档规格与修改范围，运行Ubuntu/Windows × Python3.10/3.12测试、全部源码Ruff检查、Node22坐标及板子状态测试以及四个固件编译。Actions锁定官方commit，仓库权限只读，不使用手机、开发板、模型密钥或付费服务。
 
 PR相对base SHA检查，push相对before SHA检查，首次push相对空树，手动相对HEAD；非法/缺失SHA立即失败。已归档历史修改不能用旧files.txt通过检查。`esp32dev`构建后执行全部工具测试及实际共享固件g++22场景；其他板型矩阵执行编译。Windows文件symlink测试因权限可能跳过，Linux应实际执行。
@@ -87,7 +89,7 @@ S3 原生 USB 固件矩阵：`python -m platformio run -d hardware/usb_bridge`�
 
 Linux最低版本回归另在Debian13.7/Python3.10.22容器完成：231项服务端与57项工具测试均通过、无skip，真实g++共享固件检查、Ruff和工作流检查器通过。独立核心安装（仅`./server`、没有开发工具/esptool/ADB）的真实CLI/HTTP检查也通过，覆盖诊断、工作台资源、缺ADB错误及正常关闭。构建时下载公开依赖，检查容器使用`--rm --network none`且不接设备、个人配置或模型；版本、源码快照SHA及原始命令见`verify-linux310-regression`归档。这是Debian容器证据，远程Ubuntu runner和原生桌面仍待验证。
 
-中英文最短入口见 [README](../README.md) / [English](../README.en.md)，起始条件明确的任务见 [示例](EXAMPLES.md)。真实手机与模型验收使用 [结果模板](ACCEPTANCE.md)；按实际控制模式、机型/Android/API、固件/代码/模型版本和起始条件记录，不能以软件测试证明全机型兼容。
+最短入口见 [English（默认）](../README.md) / [简体中文](../README.zh-CN.md)，起始条件明确的任务见 [示例](EXAMPLES.md)。真实手机与模型验收使用 [结果模板](ACCEPTANCE.md)；按实际控制模式、机型/Android/API、固件/代码/模型版本和起始条件记录，不能以软件测试证明全机型兼容。
 
 自动任务关键测试使用MockTransport、假手机/控制器/模型，不调用付费接口。离线浏览器验收可执行：
 

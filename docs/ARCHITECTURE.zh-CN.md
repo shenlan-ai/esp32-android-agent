@@ -65,6 +65,7 @@ Python 服务端
   ├─ Controller ──── ESP32 HID / ADB 控制
   ├─ TaskRunner ──── 规划 → 观察 → 执行 → 验证
   ├─ ModelClient ─── OpenAI 兼容视觉模型
+  ├─ MCP HTTP桥接 ── 可选stdio进程 → 外部Agent观察/单步控制/停止
   └─ TraceStore ──── 动作、结果、耗时、可选截图
 ```
 
@@ -131,7 +132,9 @@ Unicode 输入使用当前获得焦点的输入连接，执行后检查结果。
 
 安卓伴侣 App 保留为后续可选画面来源，用于不希望使用 ADB 的用户。它引入安装、MediaProjection 授权、前台服务和后台生命周期适配，不进入首版默认依赖。
 
-其他后续能力：scrcpy 视频接入、绝对坐标 HID、局部 OCR、任务模板、多设备管理、外部 API/MCP 集成。根据实际成功率和用户需求逐项增加。
+MCP已提供可选stdio桥接：外部Agent通过本机HTTP复用唯一DeviceSession，获得真正图片及一次输入的60秒观察凭据；共用任务冲突、能力、校准、串行、停止和陈旧画面检查。核心服务不依赖MCP SDK，桥接不读取模型设置、不重开串口，详见 [MCP说明](MCP.md)。
+
+其他后续能力：scrcpy 视频接入、绝对坐标 HID、局部 OCR、任务模板、多设备管理。根据实际成功率和用户需求逐项增加。
 
 ## 9. 网页、配置和记录
 

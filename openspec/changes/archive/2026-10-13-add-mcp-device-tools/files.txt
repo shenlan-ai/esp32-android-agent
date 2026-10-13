@@ -1,0 +1,16 @@
+server/android_agent/app.py
+server/android_agent/session.py
+server/android_agent/mcp_api.py
+server/android_agent/mcp.py
+server/pyproject.toml
+server/tests/test_mcp_api.py
+server/tests/test_mcp.py
+server/tests/mcp_demo.py
+docs/MCP.md
+docs/acceptance/2026-10-13-codex-mcp.md
+docs/ARCHITECTURE.zh-CN.md
+docs/DEVELOPMENT.md
+README.md
+README.en.md
+openspec/specs/mcp-device-tools/spec.md
+.runtime-local/mcp-*
