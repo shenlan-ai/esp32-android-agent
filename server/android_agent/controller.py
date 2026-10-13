@@ -17,7 +17,7 @@ class AdbController:
 
     @property
     def capabilities(self) -> list[str]:
-        return list(ACTION_FIELDS)
+        return [name for name in ACTION_FIELDS if name not in {"path", "circle"}]
 
     async def execute(self, action: Action, frame: Frame) -> None:
         name = action.action

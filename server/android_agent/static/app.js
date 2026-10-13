@@ -3,6 +3,7 @@ import { messages } from './i18n.js';
 import { createTaskView } from './tasks.js';
 import { createUsbSetup } from './usb.js';
 import { createFirmwareSetup } from './firmware.js';
+import { boardStatusKey } from './board-status.js';
 
 const $ = id => document.getElementById(id);
 let language = 'zh', token = '', csrf = '', status = null, frameId = null, blobUrl = '';
@@ -110,9 +111,7 @@ async function poll() {
       $('connection-state').textContent = t('connected');
       $('mode-label').textContent = status.serial ? `${status.mode.toUpperCase()} · ${status.serial}` : t('noSelection');
       const board = status.board;
-      $('board-status').textContent = !board ? t('boardInactive') : !board.connected ? `${t('boardDisconnected')} ${board.error || ''}`
-        : !board.hid_ready ? t(status.mode === 'usb' ? 'usbHostNeeded' : 'boardPairNeeded')
-        : !status.calibrated ? t('boardCalibrateNeeded') : t('boardReady');
+      $('board-status').textContent = t(boardStatusKey(status)) + (board && !board.connected && board.error ? ` ${board.error}` : '');
       for (const id of ['probe-x','probe-y','save-calibration']) $(id).disabled = !(board?.connected && board.hid_ready && status.serial);
       usb.status(status);
       firmware.status(status);

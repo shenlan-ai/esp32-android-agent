@@ -1,6 +1,12 @@
 # Windows 便携包
 
-本项目提供本地构建的 Windows x64 便携包。当前尚未在 GitHub 发布正式二进制版本。便携程序包含 Python 和网页，不需要安装 Python、Node 或 Arduino。Android 与 S3 实机输入仍待验收，构建和模拟通过不代表所有手机兼容。
+本项目提供本地构建的 Windows x64 便携包。当前尚未在 GitHub 发布正式二进制版本；公开源码不等于发布 ZIP 或 GitHub Release。未来正式分发须按 [发布准备](RELEASING.md) 从明确的已提交版本重新构建与验收，不重命名旧 dirty 开发产物后发布。便携程序包含 Python 和网页，不需要安装 Python、Node 或 Arduino。Redmi Note14 5G / Android15的基本键鼠和BLE0.1.4连续笔划已有实机证据；精细坐标、单次全自动原生任务稳定性、Android16/17及S3实物仍未验证，构建和模拟通过不代表所有手机兼容。
+
+2026-10-13最新开发验证包：`dist/windows-0.1.0-continuous-20261013/esp32-android-agent-0.1.0-windows-x64.zip`，104922338字节，SHA256 `0a6f1d90f34f59087681893ced9a0063f43e9dda7393a7c2f48a6cdc38e201b6`，与sidecar一致。包括BLE0.1.4/USB0.1.2连续path/circle与按当前控制器筛选模型示例的实现。应用版本仍0.1.0，release记录HEAD `e317d7687f92a35533654f4a2c1ee4c9af37194d`、dirty=true、Python3.12.14，是本机开发验证包，未在GitHub正式发布。旧vector-model包保留为历史产物，不含以上最新修复。
+
+在新中文/空格路径解压后真实exe smoke通过：完整inventory、诊断、页面/静态/API、缺ADB、端口冲突、独立工具diagnose、四板catalog，PATH排除系统Python/ADB且未使用设备或模型。382个项目源文件与构建快照逐字节一致，9个冻结静态资源、16镜像与当前源码/catalog一致，冻结agent/llm/models/ble完整代码对象与源码一致；主程序未捆入esptool。真实Git暂存区SHA保持不变。验证记录见OpenSpec `refresh-continuous-hid-portable`。本段SHA和结果在构建后补充，包内文档与OpenSpec为构建前快照。
+
+当前经典COM5板已单次刷入BLE0.1.4并读取校验，通过Redmi Note14 5G / Android15竖屏531/1176校准、闭合path/circle和第二段中途停止释放。本机白板VLM笑脸独立最终核验通过；原生hello由模型新建并输入后，创建任务结束失败，经人工退出和单独VLM任务确认新内容已保存。不能称单次全自动稳定通过或全机型兼容。完整记录见 [手机验收报告](acceptance/2026-10-13-redmi-note14-ble.md)。未来覆盖固件仍需新完整备份及版本明确确认。
 
 ## 解压与启动
 

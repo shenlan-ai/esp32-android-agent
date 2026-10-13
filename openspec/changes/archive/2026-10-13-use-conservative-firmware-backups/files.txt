@@ -1,0 +1,8 @@
+tools/firmware_worker.py
+scripts/flash_board.py
+scripts/tests/test_flash_board.py
+scripts/tests/test_firmware_worker.py
+server/android_agent/firmware.py
+server/tests/test_firmware.py
+docs/BLE-SETUP.md
+openspec/specs/firmware-backup-transfer/spec.md

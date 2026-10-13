@@ -1,0 +1,11 @@
+hardware/ble_bridge/include/action_engine.h
+hardware/ble_bridge/src/main.cpp
+hardware/usb_bridge/src/main.cpp
+hardware/ble_bridge/tests/action_engine_test.cpp
+scripts/tests/test_firmware_engine.py
+hardware/PROTOCOL.md
+docs/BLE-SETUP.md
+docs/COMPATIBILITY.md
+docs/acceptance/2026-10-13-redmi-note14-ble.md
+openspec/specs/ble-serial-control/spec.md
+openspec/specs/usb-hid-control/spec.md

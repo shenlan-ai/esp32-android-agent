@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import secrets
+import time
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,7 +14,7 @@ from android_agent.ble import Calibration
 from android_agent.config import ConfigStore, Preferences, RuntimeSettings
 from android_agent.errors import DeviceError
 from android_agent.models import Action
-from android_agent.screen import AdbScreen
+from android_agent.screen import AdbScreen, Frame
 from android_agent.session import DeviceSession
 from android_agent.usb import UsbController, UsbListener, authentication_proof
 
@@ -36,8 +37,11 @@ class FakeUsbBoard:
         self.auto_complete = True
         self.heartbeat_ack = True
         self.release_sent = True
+        self.firmware = "0.1.0"
+        self.include_firmware = True
         self.task = None
         self.writer = None
+        self.capabilities = ["tap", "type", "wait", "key", "swipe"]
 
     async def connect(self, listener, key=KEY):
         self.reader, self.writer = await asyncio.open_connection("127.0.0.1", listener.port)
@@ -59,7 +63,8 @@ class FakeUsbBoard:
                 self.requests.append(obj)
                 if obj["op"] == "hello":
                     await self.emit(obj, "hello", chip="esp32s3", board_id=BOARD,
-                                    profile="test", firmware="test", capabilities=["tap", "type", "wait", "key", "swipe"])
+                                    profile="test", capabilities=self.capabilities,
+                                    **({"firmware": self.firmware} if self.include_firmware else {}))
                 elif obj["op"] == "heartbeat" and self.heartbeat_ack:
                     await self.emit(obj, "heartbeat")
                 elif obj["op"] == "status":
@@ -105,6 +110,62 @@ async def test_authenticated_handshake_and_live_heartbeat(connection):
     await until(lambda: any(obj["op"] == "heartbeat" for obj in board.requests))
     assert KEY not in json.dumps(listener.public())
     assert bridge.public()["usb_connected"] is True
+
+
+@pytest.mark.parametrize("included,version", [
+    (False, "0.1.0"), (True, None), (True, {"version": "0.1.0"}),
+    (True, "unknown"), (True, "UNKNOWN"), (True, ""),
+    (True, "bad version"), (True, "x" * 65),
+])
+async def test_unknown_usb_handshake_rejects_coordinates_but_keeps_keyboard(included, version):
+    listener, board = UsbListener("127.0.0.1", 0), FakeUsbBoard()
+    board.include_firmware, board.firmware = included, version
+    try:
+        await listener.start(KEY, BOARD)
+        await board.connect(listener)
+        await until(lambda: listener.current is not None)
+        bridge = listener.current
+        assert bridge.connected and bridge.firmware == ""
+        saved = Calibration(phone="phone1", width=200, height=400, counts_x=800, counts_y=1200)
+        controller = UsbController(bridge, "phone1", saved)
+        from android_agent.screen import Frame
+
+        frame = Frame(1, "phone1", 0, 200, 400, b"", b"")
+        assert "tap" not in controller.capabilities
+        with pytest.raises(DeviceError):
+            await controller.execute(Action(action="tap", x=500, y=500), frame)
+        assert not [p for p in board.requests if p["op"] == "action"]
+        await controller.execute(Action(action="type", text="test"), frame)
+        assert len([p for p in board.requests if p["op"] == "action"]) == 1
+    finally:
+        await listener.close()
+        await board.close()
+
+
+async def test_usb_path_negotiates_and_cancels_without_replay():
+    listener, board = UsbListener("127.0.0.1", 0), FakeUsbBoard()
+    board.firmware = "0.1.2"
+    board.capabilities.append("path")
+    await listener.start(KEY, BOARD)
+    try:
+        await board.connect(listener)
+        await until(lambda: listener.current is not None and listener.current.connected)
+        cal = Calibration(phone="phone1", width=200, height=400, counts_x=800, counts_y=1200, firmware="0.1.2")
+        control = UsbController(listener.current, "phone1", cal)
+        assert {"path", "circle"} <= set(control.capabilities)
+        board.auto_complete = False
+        frame = Frame(1, "phone1", time.monotonic(), 200, 400, b"", b"")
+        action = asyncio.create_task(control.execute(Action(action="path", points=[[0, 0], [100, 300], [500, 300]]), frame))
+        await until(lambda: board.active is not None)
+        assert board.active["points"] == [[0, 0], [80, 360], [400, 360]]
+        action.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await action
+        assert board.active is None
+        assert len([p for p in board.requests if p["op"] == "action"]) == 1
+    finally:
+        await listener.close()
+        await board.close()
 
 
 @pytest.mark.parametrize("kind", ["wrong_key", "wrong_board", "replay", "large", "version_bool"])
@@ -297,7 +358,7 @@ def test_usb_calibration_is_saved_separately(tmp_path, fake_adb):
     with TestClient(create_app(RuntimeSettings(data_dir=tmp_path), fake_adb), base_url="http://127.0.0.1") as client:
         headers = {"X-Agent-CSRF": client.get("/api/session").json()["csrf"]}
         client.post("/api/devices/select", json={"serial": "phone1"}, headers=headers)
-        bridge = SimpleNamespace(connected=True, hid_ready=True, board_id=BOARD, capabilities=["tap"],
+        bridge = SimpleNamespace(connected=True, hid_ready=True, board_id=BOARD, firmware="0.1.0", capabilities=["tap"],
                                  stop=AsyncMock(), close=AsyncMock())
         client.app.state.session.controller = UsbController(bridge, "phone1")
         reply = client.post("/api/control/calibrate", json={"phone": "phone1", "width": 200, "height": 400,

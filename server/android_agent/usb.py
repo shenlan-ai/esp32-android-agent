@@ -9,7 +9,7 @@ import secrets
 import time
 
 from .async_utils import wait_for
-from .ble import CAPABILITIES, BleController, SerialBridge
+from .ble import CAPABILITIES, BleController, SerialBridge, normalize_firmware
 from .errors import DeviceError
 
 BOARD_ID = re.compile(r"^[0-9a-f]{12}$")
@@ -50,7 +50,7 @@ class UsbBridge(SerialBridge):
                 raise DeviceError("Invalid USB board capabilities")
             self.capabilities = sorted(CAPABILITIES.intersection(caps))
             self.session = result["session"]
-            self.firmware = str(result.get("firmware", "unknown"))[:50]
+            self.firmware = normalize_firmware(result.get("firmware"))
             self.profile = str(result.get("profile", "unknown"))[:60]
             self._last_heartbeat = time.monotonic()
             self._heartbeat = asyncio.create_task(self._pulse())

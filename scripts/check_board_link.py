@@ -7,6 +7,7 @@ import json
 import time
 
 import serial
+
 from android_agent.ble import SerialBridge
 
 

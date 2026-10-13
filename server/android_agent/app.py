@@ -207,6 +207,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
             frame = session.screen.frame
             calibrated = bool(
                 frame
+                and calibration.compatible_firmware(session.controller.bridge.firmware)
                 and (calibration.phone, calibration.width, calibration.height)
                 == (frame.serial, frame.width, frame.height)
             )
@@ -317,7 +318,7 @@ def create_app(settings: RuntimeSettings | None = None, adb=None, model_factory=
 
     @app.post("/api/control/calibrate")
     async def calibrate(calibration: Calibration):
-        await app.state.session.calibrate(calibration)
+        calibration = await app.state.session.calibrate(calibration)
         controller = app.state.session.controller
         if isinstance(controller, UsbController):
             app.state.preferences.usb_calibrations[f"{controller.bridge.board_id}:{calibration.phone}"] = calibration

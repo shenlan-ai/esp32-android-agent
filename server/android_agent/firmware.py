@@ -31,6 +31,39 @@ DIGEST = re.compile(r"[0-9a-f]{64}")
 log = logging.getLogger(__name__)
 
 
+def failure_message(operation: str, kind: str = "failed", result: object = None) -> str:
+    prefix = f"Firmware {operation} {kind}"
+    stages = {"validate": "validation", "connect": "serial connection", "identify": "board identification",
+              "stub": "temporary reader startup", "read": "Flash reading", "save": "backup saving",
+              "write": "Flash writing", "verify": "read-back verification"}
+    allowed = {"diagnose": {"validate"}, "identify": {"validate", "connect", "identify"},
+               "backup": {"validate", "connect", "identify", "stub", "read", "save"},
+               "write": {"validate", "connect", "identify", "stub", "write", "verify"}}
+    reasons = {"timeout": "timeout", "packet_transfer_stopped": "transfer stopped",
+               "digest_mismatch": "digest mismatch", "io_error": "IO error",
+               "operation_failed": "operation failed"}
+    if (isinstance(result, dict) and result.get("protocol") == PROTOCOL
+            and result.get("ok") is False and result.get("error") == "operation_failed"
+            and result.get("operation") == operation and isinstance(result.get("failure"), dict)):
+        failure = result["failure"]
+        stage, reason = failure.get("stage"), failure.get("reason")
+        if (isinstance(stage, str) and stage in allowed[operation]
+                and isinstance(reason, str) and reason in reasons):
+            detail = f" during {stages[stage]}"
+            if stage == "read":
+                completed, total = failure.get("completed_bytes"), failure.get("total_bytes")
+                if (type(completed) is int and type(total) is int and total in {4194304, 8388608}
+                        and 0 <= completed < total):
+                    detail += f" ({completed}/{total} bytes completed)"
+                else:
+                    detail = ""
+            if detail:
+                prefix += f"{detail}: {reasons[reason]}"
+    if operation == "write":
+        return prefix + "; writing may be incomplete or unverified. Keep the backup."
+    return prefix + "; no Flash was written. Check USB power, driver and port ownership."
+
+
 def default_catalog(settings) -> Path | None:
     root = portable_root()
     return settings.firmware_dir or (root / "firmware" if root else None)
@@ -113,15 +146,21 @@ class FirmwareTool:
         try:
             output, overflow = await wait_for(collect(), timeout)
             if proc.returncode or overflow:
-                raise DeviceError("Firmware tool failed; check USB power, driver and port ownership. Writing may be incomplete; keep the backup.")
+                failure = None
+                if not overflow:
+                    try:
+                        failure = json.loads(output)
+                    except (ValueError, UnicodeDecodeError):
+                        pass
+                raise DeviceError(failure_message(operation, result=failure))
             result = json.loads(output)
             if not isinstance(result, dict) or result.get("protocol") != PROTOCOL or result.get("ok") is not True:
-                raise DeviceError("Invalid firmware tool response; writing may be unverified")
+                raise DeviceError(failure_message(operation, "received an invalid tool response"))
             return result
         except asyncio.TimeoutError as exc:
-            raise DeviceError("Firmware tool timed out; writing may be incomplete. Keep the backup and reconnect before retrying.") from exc
+            raise DeviceError(failure_message(operation, "timed out")) from exc
         except (ValueError, UnicodeDecodeError) as exc:
-            raise DeviceError("Invalid firmware tool response; writing may be unverified") from exc
+            raise DeviceError(failure_message(operation, "received an invalid tool response")) from exc
         finally:
             await self._terminate(proc)
             out.cancel()
@@ -294,10 +333,13 @@ class FirmwareManager:
             job["manifest_sha256"] = await asyncio.to_thread(self.catalog.snapshot, profile, snapshot)
             self.directory.mkdir(parents=True, mode=0o700, exist_ok=True)
             part = self.directory / f"{job_id}.part"
-            result = await self.tool.run("backup", *self._identity_args(job), "--output", str(part), timeout=600)
+            expected = job["identity"]["flash_bytes"]
+            result = await self.tool.run(
+                "backup", *self._identity_args(job), "--output", str(part),
+                timeout=max(600, expected / 8192 + 60),
+            )
             if fingerprint(valid_identity(result.get("identity"))) != fingerprint(job["identity"]):
                 raise DeviceError("Board identity changed; no firmware was written")
-            expected = job["identity"]["flash_bytes"]
             if part.is_symlink() or not part.is_file() or part.stat().st_size != expected:
                 raise DeviceError("Incomplete flash backup; firmware write refused")
             digest = await asyncio.to_thread(sha256, part)

@@ -2,11 +2,26 @@
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def command_targets(job: dict, prefix: tuple[str, ...]) -> set[str]:
+    """Inspect direct commands in this job; comments are never runnable coverage."""
+    targets = set()
+    for step in job["steps"]:
+        for line in step.get("run", "").splitlines():
+            try:
+                words = shlex.split(line, comments=True)
+            except ValueError:
+                continue  # Full shell/YAML syntax is checked by actionlint.
+            if tuple(words[:len(prefix)]) == prefix:
+                targets.update(words[len(prefix):])
+    return targets
 
 
 def check() -> list[str]:
@@ -48,6 +63,14 @@ def check() -> list[str]:
                 errors.append(f"ci.yml: missing governance check {requirement}")
         if "python -m unittest discover -s scripts/tests" not in str(jobs["firmware"]):
             errors.append("ci.yml: native/tools tests not included after firmware build")
+        if not {"server/tests/geometry.test.mjs", "server/tests/board-status.test.mjs"} <= command_targets(
+            jobs["geometry"], ("node", "--test")
+        ):
+            errors.append("ci.yml: geometry job must run coordinate and board-status tests")
+        if not {"server", "scripts", "tools", "packaging"} <= command_targets(
+            jobs["python"], ("python", "-m", "ruff", "check", "--config", "server/pyproject.toml")
+        ):
+            errors.append("ci.yml: Python job must lint server, scripts, tools and packaging with project config")
     portable = workflows["portable.yml"]
     if set(portable["on"]) != {"workflow_dispatch"}:
         errors.append("portable.yml: building the artifact must be manual")

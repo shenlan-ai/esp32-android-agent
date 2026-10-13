@@ -1,0 +1,4 @@
+docs/PORTABLE.md
+docs/BLE-SETUP.md
+docs/COMPATIBILITY.md
+docs/AGENT-USAGE.md

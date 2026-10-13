@@ -1,0 +1,4 @@
+docs/PORTABLE.md
+docs/COMPATIBILITY.md
+scripts/check_board_link.py
+scripts/tests/test_identify_board.py

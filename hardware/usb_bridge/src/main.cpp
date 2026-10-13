@@ -132,7 +132,7 @@ void cdcReply(uint32_t id, const char *status) {
     JsonDocument out;
     out["v"] = 1; out["id"] = id; out["status"] = status;
     out["chip"] = "esp32s3"; out["board_id"] = boardId;
-    out["protocol"] = "android-agent-usb-v1"; out["firmware"] = "0.1.0";
+    out["protocol"] = "android-agent-usb-v1"; out["firmware"] = "0.1.2";
     out["profile"] = AGENT_BOARD_PROFILE; out["configured"] = configured;
     serializeJson(out, Serial); Serial.println();
 }
@@ -184,10 +184,10 @@ void consumeTcp(const String &line) {
         session = buffer; lastId = 0; lastStatus = ""; reportFailed = false; heartbeatAt = millis();
         JsonDocument out;
         out["v"] = 1; out["session"] = session; out["id"] = id; out["status"] = "hello";
-        out["chip"] = "esp32s3"; out["firmware"] = "0.1.0"; out["board_id"] = boardId;
+        out["chip"] = "esp32s3"; out["firmware"] = "0.1.2"; out["board_id"] = boardId;
         out["profile"] = AGENT_BOARD_PROFILE; out["usb_connected"] = usbReady();
         auto caps = out["capabilities"].to<JsonArray>();
-        for (const char *cap : {"tap", "swipe", "long_press", "scroll", "type", "key", "wait"}) caps.add(cap);
+        for (const char *cap : {"tap", "swipe", "path", "long_press", "scroll", "type", "key", "wait"}) caps.add(cap);
         if (!emit(out)) disconnect("write_failed");
         return;
     }

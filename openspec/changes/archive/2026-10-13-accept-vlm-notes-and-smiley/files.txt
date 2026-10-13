@@ -1,0 +1,5 @@
+scripts/phone_examples_fixture.py
+docs/EXAMPLES.md
+docs/COMPATIBILITY.md
+docs/acceptance/2026-10-13-redmi-note14-ble.md
+openspec/specs/continuous-validation/spec.md

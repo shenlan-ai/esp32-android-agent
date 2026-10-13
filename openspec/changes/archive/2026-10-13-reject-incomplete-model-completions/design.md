@@ -1,0 +1,11 @@
+## Decisions
+OpenAI兼容choices[0]存在finish_reason且值不为stop/null时拒绝：length固定提示输出额度耗尽，content_filter固定提示过滤，tool_calls/function_call固定提示工具输出不支持，其余/非法类型使用固定未正常完成提示。字段缺失或null保留旧供应商兼容，不推断已完成。message含非空refusal/tool_calls/function_call也拒绝，不解析或记录供应商文字。
+
+Usage与耗时在这些明确completion拒绝前提取，错误ModelCompletionError继承ModelProtocolError并携带Usage/seconds。TaskRunner先捕获该类并计费、发model_usage事件，然后按既有有限恢复处理；真实用量不估算，缺失用量保守估算，uncertain_calls不增加。网络、超时和非法信封仍走既有未知用量规则。预算检查保持：有限恢复也不能绕过总Token上限；客户端只发一次请求，无自动HTTP重试、截断JSON修复、reasoning解析或扩大输出额度。
+
+只检测失败信号，不增加未经证明的模型能力或配置变化。元数据缺失的旧响应仍需严格JSON/能力/参数校验和独立目标核验。正式结束检查的真实机型结论待实测，不回改历史失败。
+
+## Validation
+
+拒绝completion缺失Usage时，估算取已有文本/图像估算与输入估算加已配置输出额度两者较大值，覆盖正文为空但推理耗尽额度的已观察情况；不把推理内容加入日志、不声称估算等于实际账单。
+先用MockTransport返回finish_reason=length且正文为合法tap，证明旧客户端会接受，再实现拒绝。测试空/合法正文、过滤、工具、拒答、非法结束字段、stop/字段缺失/null兼容、真实/估算Usage及供应商原文脱敏；真实TaskRunner确认零输入、准确用量、连续失败/Token限额、结束释放和旧网络unknown语义。运行相关及全服务端测试、Ruff、OpenSpec strict/范围/diff。无设备/外部付费模型请求，不覆盖等待授权的固件。

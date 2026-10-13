@@ -15,8 +15,8 @@ from identify_board import probe
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(executable: str, port: str, *args: str, timeout: int = 180) -> None:
-    subprocess.run([executable, "--port", port, "--baud", "460800", *args], check=True, timeout=timeout)
+def run(executable: str, port: str, *args: str, timeout: int = 180, baud: int = 460800) -> None:
+    subprocess.run([executable, "--port", port, "--baud", str(baud), *args], check=True, timeout=timeout)
 
 
 def require_classic(report: dict) -> None:
@@ -29,7 +29,7 @@ def backup(executable: str, port: str, folder: Path) -> Path:
     path = folder / f"esp32-{datetime.now():%Y%m%d-%H%M%S}.bin"
     if path.exists():
         raise ValueError("Backup file already exists; retry after one second")
-    run(executable, port, "read-flash", "0", "0x400000", str(path))
+    run(executable, port, "read-flash", "0", "0x400000", str(path), timeout=600, baud=115200)
     if path.stat().st_size != 4 * 1024 * 1024:
         raise ValueError("Incomplete flash backup; firmware write cancelled")
     digest = hashlib.sha256(path.read_bytes()).hexdigest()

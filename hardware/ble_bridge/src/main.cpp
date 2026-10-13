@@ -3,6 +3,7 @@
 // Pointer homing approach adapted from esp32-iphone-agent, Copyright (c) 2026 Henry Yuan.
 // https://github.com/onehumanbeing/esp32-iphone-agent (see repository LICENSE / NOTICE).
 #include "action_engine.h"
+#include "ble_diagnostics.h"
 #include <atomic>
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -17,6 +18,8 @@ constexpr size_t LINE_LIMIT = 1024;
 BLEHIDDevice *hid;
 BLECharacteristic *keyboardInput, *mouseInput;
 std::atomic<bool> authenticated{false}, restartAdvertising{false};
+std::atomic<bool> linkConnected{false};
+std::atomic<int> authError{-1};
 std::atomic<bool> reportFailed{false};
 bool previousConnection = false;
 String session, inputLine;
@@ -49,6 +52,11 @@ bool subscribed(BLECharacteristic *input) {
 }
 bool hidReady() { return authenticated && keyboardInput && mouseInput && subscribed(keyboardInput) && subscribed(mouseInput); }
 
+void addDiagnostics(JsonDocument &doc) {
+    addBleDiagnostics(doc, {linkConnected.load(), authenticated.load(),
+        keyboardInput && subscribed(keyboardInput), mouseInput && subscribed(mouseInput), authError.load()});
+}
+
 void mouseReport(int x = 0, int y = 0, int wheel = 0) {
     uint8_t data[] = {buttons, uint8_t(x), uint8_t(y), uint8_t(wheel), 0};
     mouseInput->setValue(data, sizeof(data));
@@ -72,6 +80,7 @@ void reply(uint32_t id, const char *status, const char *error = "") {
         doc["elapsed_ms"] = job.elapsedMs; doc["button_held_ms"] = job.heldMs;
     }
     if (*error) doc["error"] = error;
+    addDiagnostics(doc);
     serializeJson(doc, Serial); Serial.println();
 }
 void finish(const char *status, const char *error = "") {
@@ -106,10 +115,11 @@ void consume(const String &line) {
         session = buffer; lastId = 0; lastStatus = ""; heartbeatAt = millis(); reportFailed = false;
         JsonDocument out;
         out["v"] = 1; out["session"] = session; out["id"] = id; out["status"] = "hello";
-        out["chip"] = "esp32"; out["firmware"] = "0.1.0";
+        out["chip"] = "esp32"; out["firmware"] = "0.1.4";
         out["ble_name"] = "Android Agent BLE"; out["ble_connected"] = hidReady();
         auto caps = out["capabilities"].to<JsonArray>();
-        for (const char *cap : {"tap", "swipe", "long_press", "scroll", "type", "key", "wait"}) caps.add(cap);
+        for (const char *cap : {"tap", "swipe", "path", "long_press", "scroll", "type", "key", "wait"}) caps.add(cap);
+        addDiagnostics(out);
         serializeJson(out, Serial); Serial.println(); return;
     }
     if (session.isEmpty() || !obj["session"].is<const char *>() || obj["session"].as<String>() != session) {
@@ -136,6 +146,11 @@ void consume(const String &line) {
     Job next;
     next.id = id; next.nextAt = millis(); next.startedAt = next.nextAt;
     if (!prepareHidAction(obj, next)) { reply(id, "error", "invalid_action"); return; }
+    // Pace relative movement below typical BLE connection batching rates.
+    // Homing keeps its fast saturation reports, then settles without blocking the loop.
+    next.motionInterval = 50;
+    next.homeSettleMs = next.homeLeft ? 600 : 0;
+    if (next.kind == "move") next.interval = next.motionInterval;
     lastId = id; lastStatus = "running"; lastError = ""; next.active = true; job = next;
     reply(id, "accepted");
 }
@@ -148,14 +163,20 @@ struct HidSink {
 } sink;
 
 class ServerCallbacks : public BLEServerCallbacks {
-    void onDisconnect(BLEServer *) override { authenticated = false; restartAdvertising = true; }
+    void onConnect(BLEServer *) override { linkConnected = true; }
+    void onDisconnect(BLEServer *) override {
+        linkConnected = false; authenticated = false; authError = -1; restartAdvertising = true;
+    }
 };
 class SecurityCallbacks : public BLESecurityCallbacks {
     uint32_t onPassKeyRequest() override { return 0; }
     void onPassKeyNotify(uint32_t) override {}
     bool onConfirmPIN(uint32_t) override { return false; }
     bool onSecurityRequest() override { return true; }
-    void onAuthenticationComplete(esp_ble_auth_cmpl_t result) override { authenticated = result.success; }
+    void onAuthenticationComplete(esp_ble_auth_cmpl_t result) override {
+        authError = result.success ? -1 : result.fail_reason;
+        authenticated = result.success;
+    }
 };
 class ReportCallbacks : public BLECharacteristicCallbacks {
     void onStatus(BLECharacteristic *, Status status, uint32_t) override {

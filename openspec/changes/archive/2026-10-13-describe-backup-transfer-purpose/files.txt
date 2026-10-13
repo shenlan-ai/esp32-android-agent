@@ -1,0 +1,1 @@
+openspec/specs/firmware-backup-transfer/spec.md

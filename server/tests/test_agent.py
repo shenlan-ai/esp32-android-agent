@@ -2,6 +2,7 @@ import asyncio
 import json
 from dataclasses import replace
 
+import httpx
 import pytest
 from conftest import image_bytes
 
@@ -9,7 +10,7 @@ from android_agent.agent import TaskRunner
 from android_agent.config import ModelSettings, Preferences
 from android_agent.errors import AgentError, DeviceError
 from android_agent.history import EventBus, TraceStore
-from android_agent.llm import ModelReply, Usage
+from android_agent.llm import ModelClient, ModelReply, Usage
 from android_agent.models import Action
 from android_agent.screen import AdbScreen, decode_frame, validate_decision
 from android_agent.session import DeviceSession
@@ -69,6 +70,13 @@ async def test_success_requires_separate_step_and_final_goal_checks(tmp_path, fa
     assert snapshot["state"] == "completed" and snapshot["actions"] == 1
     assert snapshot["model_calls"] == 5 and snapshot["tokens"] == 250
     assert len(models.calls[2][2]) == 2  # Independent before/after step verification.
+    clean = decode_frame(fake_adb.png, "phone1", 1).jpeg
+    assert models.calls[0][2] == [clean]  # Planner sees the unmodified phone.
+    assert models.calls[1][2][0] != clean  # Actor alone sees coordinate guides.
+    assert models.calls[2][2] == [clean, clean]
+    assert models.calls[4][2] == [clean]
+    assert models.calls[1][1]["screen"]["width"] == 200
+    assert models.calls[1][1]["screen"]["height"] == 400
     assert models.calls[4][1] == {"kind": "goal", "goal": "Open Settings"}
     assert len(models.calls[4][2]) == 1
     assert models.closed == 2 and session._agent_owner is None
@@ -87,10 +95,78 @@ async def test_actor_false_done_cannot_mark_task_complete(tmp_path, fake_adb):
     assert result["steps"][0]["status"] == "not_verified"
 
 
+@pytest.mark.parametrize("confirmed", [True, False])
+async def test_continuous_strokes_still_require_independent_goal_check(tmp_path, fake_adb, confirmed):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from android_agent.ble import BleController, Calibration
+    path = {"action": "path", "points": [[300, 400], [400, 500], [600, 400]],
+            "reason": "draw continuous curve", "expected": "one joined stroke"}
+    circle = {"action": "circle", "x": 500, "y": 500, "r": 50,
+              "reason": "draw circle", "expected": "closed round stroke"}
+    session = DeviceSession(fake_adb, AdbScreen(fake_adb))
+    await session.select("phone1")
+    bridge = SimpleNamespace(connected=True, hid_ready=True, firmware="0.1.4", capabilities=["path"],
+                             request=AsyncMock(return_value={}), stop=AsyncMock(return_value={"release": "hid_release_sent"}))
+    session.controller = BleController(bridge, "phone1", Calibration(phone="phone1", width=200, height=400,
+        counts_x=800, counts_y=1200, firmware="0.1.4"))
+    models = ScriptedModels([PLAN, path, VERIFIED, circle, VERIFIED, DONE,
+                             {"confirmed": confirmed, "evidence": "independent goal evidence"}])
+    task = TaskRunner(session, TraceStore(tmp_path), EventBus(), models, settle_interval=0)
+    await task.start("Draw the requested shapes", Preferences(actor=ModelSettings(model="vision", api_key="secret"), max_failures=1))
+    result = await finish(task)
+    assert result["state"] == ("completed" if confirmed else "failed")
+    assert result["actions"] == 2 and result["model_calls"] == 7
+    assert bridge.request.await_count == 2 and bridge.stop.await_count == 1
+    assert all(call.kwargs["action"] == "path" for call in bridge.request.call_args_list)
+    assert len(models.calls[2][2]) == 2 and len(models.calls[4][2]) == 2
+    assert models.calls[6][1] == {"kind": "goal", "goal": "Draw the requested shapes"}
+
+
 async def test_unsupported_model_action_never_reaches_device(tmp_path, fake_adb):
     task, _, _, _ = await runner(tmp_path, fake_adb, [PLAN, {**TAP, "x": True}], max_failures=1)
     assert (await finish(task))["state"] == "failed"
     assert not any("input" in args for _, args in fake_adb.calls)
+
+
+@pytest.mark.parametrize("usage,budget,failures,expected_calls,expected_tokens,estimated", [
+    ({"total_tokens": 321}, 100000, 3, 6, 993, 0),
+    ({"total_tokens": 1100}, 1000, 3, 2, 1110, 0),
+    (None, 100000, 1, 2, None, 1),
+])
+async def test_received_truncated_actions_never_execute_and_keep_usage(
+        tmp_path, fake_adb, usage, budget, failures, expected_calls, expected_tokens, estimated):
+    requests, clients = [], []
+    def handle(request):
+        body = json.loads(request.content)
+        requests.append(body)
+        planning = body["messages"][0]["content"].startswith("Plan")
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop" if planning else "length",
+            "message": {"content": json.dumps(PLAN if planning else TAP)}}],
+            "usage": {"total_tokens": 10} if planning else usage})
+    def factory(settings):
+        client = ModelClient(settings, httpx.MockTransport(handle))
+        clients.append(client)
+        return client
+    session = DeviceSession(fake_adb, AdbScreen(fake_adb))
+    await session.select("phone1")
+    task = TaskRunner(session, TraceStore(tmp_path), EventBus(), factory, settle_interval=0)
+    prefs = Preferences(actor=ModelSettings(model="vision"), max_total_tokens=budget, max_failures=failures)
+    await task.start("Open Settings", prefs)
+    result = await finish(task)
+    assert result["state"] == "failed" and result["actions"] == 0
+    assert len(requests) == result["model_calls"] == expected_calls
+    assert result["uncertain_calls"] == 0 and result["estimated_calls"] == estimated
+    if expected_tokens is not None:
+        assert result["tokens"] == expected_tokens
+    else:
+        assert result["tokens"] > 4096
+    assert "Token" in result["reason"] if budget == 1000 else "output limit" in result["reason"]
+    assert not any("input" in args for _, args in fake_adb.calls)
+    assert session._agent_owner is None and all(c.http.is_closed for c in clients)
+    trace = (task.traces.directory(task.id) / "events.jsonl").read_text(encoding="utf-8")
+    assert '"model_usage_unknown"' not in trace and '"model_usage"' in trace
 
 
 async def test_changed_target_replans_before_input(tmp_path, fake_adb):
@@ -239,3 +315,52 @@ async def test_screenshot_opt_in_and_clear_retains_disk_history(tmp_path, fake_a
     await task.clear()
     assert task.id is None and not task.images and not task.steps
     assert (await task.traces.read(task_id))["state"] == "completed"
+
+
+@pytest.mark.parametrize("mode", ["adb", "hid_calibrated", "hid_uncalibrated", "hid_offline"])
+async def test_actual_actor_request_only_examples_current_capabilities(tmp_path, fake_adb, mode):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from android_agent.agent import action_prompt
+    from android_agent.ble import KEYS as HID_KEYS
+    from android_agent.ble import BleController, Calibration
+    from android_agent.llm import parse_decision
+    from android_agent.models import KEYS
+
+    session = DeviceSession(fake_adb, AdbScreen(fake_adb))
+    await session.select("phone1")
+    if mode != "adb":
+        bridge = SimpleNamespace(connected=True, hid_ready=mode != "hid_offline", firmware="0.1.4",
+                                 capabilities=["tap", "swipe", "path", "type", "key", "wait"],
+                                 stop=AsyncMock(return_value={"release": "hid_release_sent"}))
+        calibration = Calibration(phone="phone1", width=200, height=400, counts_x=800,
+                                  counts_y=1200, firmware="0.1.4") if mode == "hid_calibrated" else None
+        session.controller = BleController(bridge, "phone1", calibration)
+    capabilities = session.controller.capabilities
+    models = ScriptedModels([PLAN, DONE, {"confirmed": False, "evidence": "Goal is absent"}])
+    task = TaskRunner(session, TraceStore(tmp_path), EventBus(), models, settle_interval=0)
+    if mode == "hid_offline":
+        with pytest.raises(DeviceError, match="available controller"):
+            await task.start("Open Settings", Preferences(actor=ModelSettings(model="vision")))
+        assert not models.calls
+        samples = [json.loads(line) for line in action_prompt([]).splitlines() if line.startswith("{")]
+        assert {sample["action"] for sample in samples} == {"done", "fail", "replan"}
+        for sample in samples:
+            parse_decision(json.dumps(sample), [], set(HID_KEYS))
+        return
+    await task.start("Open Settings", Preferences(actor=ModelSettings(model="vision"), max_failures=1))
+    result = await finish(task)
+    system, payload, _ = models.calls[1]
+    samples = [json.loads(line) for line in system.splitlines() if line.startswith("{")]
+    meta = {"done", "fail", "replan"}
+    assert {sample["action"] for sample in samples} == set(capabilities) | meta
+    assert payload["capabilities"] == capabilities
+    assert "home|back|recents" not in system
+    for sample in samples:
+        parse_decision(json.dumps(sample), capabilities, set(KEYS) if mode == "adb" else set(HID_KEYS))
+        if sample["action"] in meta:
+            assert set(sample) <= {"action", "reason", "answer"}
+    assert result["state"] == "failed" and result["actions"] == 0
+    assert models.calls[2][1] == {"kind": "goal", "goal": "Open Settings"}
+    assert not any("input" in args for _, args in fake_adb.calls)

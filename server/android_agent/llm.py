@@ -103,6 +103,13 @@ class ModelReply:
     seconds: float
 
 
+class ModelCompletionError(ModelProtocolError):
+    """A received but unusable completion with accountable token consumption."""
+    def __init__(self, reason: str, usage: Usage, seconds: float):
+        super().__init__(reason)
+        self.usage, self.seconds = usage, seconds
+
+
 def estimate_tokens(system: str, text: str, images: list[bytes], output: str = "") -> int:
     # A conservative execution guard, explicitly not a provider billing formula.
     return math.ceil((len(system) + len(text) + len(output)) / 3) + 4096 * len(images)
@@ -147,18 +154,40 @@ class ModelClient:
                     if len(data) > 1024 * 1024:
                         raise ModelProtocolError("Model response exceeds the size limit")
             envelope = json.loads(data)
-            text_out = envelope["choices"][0]["message"]["content"]
-            if not isinstance(text_out, str) or len(text_out) > 20000:
+            choice = envelope["choices"][0]
+            message = choice["message"]
+            if not isinstance(message, dict):
                 raise ValueError("invalid message")
+            text_out = message.get("content")
             provided = envelope.get("usage")
             total = provided.get("total_tokens") if isinstance(provided, dict) else None
             if type(total) is not int or total < 0:
                 parts = [provided.get(k) for k in ("prompt_tokens", "completion_tokens")] if isinstance(provided, dict) else []
                 total = sum(parts) if len(parts) == 2 and all(type(p) is int and p >= 0 for p in parts) else None
             usage = Usage(total, False) if total is not None else Usage(
-                estimate_tokens(system, text, images, text_out), True
+                estimate_tokens(system, text, images, text_out if isinstance(text_out, str) else ""), True
             )
-            return ModelReply(text_out, usage, time.monotonic() - started)
+            seconds = time.monotonic() - started
+            finish = choice.get("finish_reason")
+            rejection = ""
+            if finish == "length":
+                rejection = "Model output limit reached; no action accepted. Review the saved output allowance or model"
+            elif finish == "content_filter":
+                rejection = "Model completion was filtered; no action accepted"
+            elif finish in ("tool_calls", "function_call") or message.get("tool_calls") or message.get("function_call"):
+                rejection = "Model returned unsupported tool output; no action accepted"
+            elif message.get("refusal"):
+                rejection = "Model refused the request; no action accepted"
+            elif finish not in (None, "stop"):
+                rejection = "Model completion did not end normally; no action accepted"
+            if rejection:
+                if usage.estimated:
+                    allowance = self.settings.extra_body.get("max_completion_tokens", 1000)
+                    usage = Usage(max(usage.total_tokens, estimate_tokens(system, text, images) + allowance), True)
+                raise ModelCompletionError(rejection, usage, seconds)
+            if not isinstance(text_out, str) or len(text_out) > 20000:
+                raise ValueError("invalid message")
+            return ModelReply(text_out, usage, seconds)
         except httpx.TimeoutException as exc:
             raise ModelError("Model request timed out; check the endpoint before retrying") from exc
         except httpx.HTTPError as exc:

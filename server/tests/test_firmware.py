@@ -33,12 +33,14 @@ class FakeTool:
     def __init__(self, api=None):
         self.api = api or fakes.FakeApi()
         self.calls = []
+        self.timeouts = []
         self.block = None
         self.started = asyncio.Event()
         self.gate = asyncio.Event()
 
     async def run(self, operation, *args, timeout=30):
         self.calls.append(operation)
+        self.timeouts.append((operation, timeout))
         if operation == self.block:
             self.started.set()
             await self.gate.wait()
@@ -78,6 +80,8 @@ async def prepare(manager, profile="esp32dev"):
 async def test_full_workflow_history_and_bound_rom(tmp_path, fake_adb, profile):
     manager, settings = manager_at(tmp_path, fake_adb, profile)
     ready = await prepare(manager, profile)
+    expected_timeout = max(600, len(manager.tool.api.memory) / 8192 + 60)
+    assert ("backup", expected_timeout) in manager.tool.timeouts
     original = bytes(manager.tool.api.memory)
     download, digest = await manager.download(ready["id"])
     assert download == original and digest == ready["backup"]["sha256"]
@@ -332,16 +336,22 @@ async def test_subprocess_timeout_or_cancel_stops_own_tree(tmp_path, cancel):
     tool = FirmwareTool(RuntimeSettings(data_dir=tmp_path))
     tool.command = [sys.executable, str(script)]
     running = asyncio.create_task(tool.run("diagnose", str(pidfile), timeout=2))
-    for _ in range(100):
-        if pidfile.exists():
-            break
-        await asyncio.sleep(.01)
-    assert pidfile.exists()
-    child_pid = int(pidfile.read_text())
-    if cancel:
+    try:
+        child_pid = None
+        for _ in range(100):
+            content = pidfile.read_text().strip() if pidfile.exists() else ""
+            if content.isdecimal() and int(content) > 0:
+                child_pid = int(content)
+                break
+            await asyncio.sleep(.01)
+        assert child_pid is not None, "Child did not publish a complete PID"
+        if cancel:
+            running.cancel()
+        with pytest.raises(asyncio.CancelledError if cancel else DeviceError):
+            await asyncio.wait_for(running, 15)
+    finally:
         running.cancel()
-    with pytest.raises(asyncio.CancelledError if cancel else DeviceError):
-        await asyncio.wait_for(running, 15)
+        await asyncio.gather(running, return_exceptions=True)
     if os.name == "nt":
         result = subprocess.run([str(Path(os.environ["SystemRoot"]) / "System32/tasklist.exe"),
                                  "/FI", f"PID eq {child_pid}", "/FO", "CSV", "/NH"],
@@ -353,3 +363,70 @@ async def test_subprocess_timeout_or_cancel_stops_own_tree(tmp_path, cancel):
         except ProcessLookupError:
             return
         assert Path(f"/proc/{child_pid}/stat").read_text().split()[2] == "Z"
+
+
+@pytest.mark.parametrize("mutation", [None, "old", "bool", "operation", "stage", "reason", "count",
+                                      "total", "malformed", "overflow", "zero"])
+async def test_failed_subprocess_diagnostics_are_strict_and_private(tmp_path, mutation):
+    secret = "private-key-device-and-path"
+    payload = {"ok": False, "protocol": "android-agent-firmware-v1", "error": "operation_failed",
+               "operation": "backup", "failure": {"stage": "read", "reason": "packet_transfer_stopped",
+               "completed_bytes": 262144, "total_bytes": 4194304, "extra": secret}, "extra": secret}
+    if mutation == "old":
+        payload.pop("failure")
+    elif mutation == "bool":
+        payload["ok"] = 0
+    elif mutation == "operation":
+        payload["operation"] = "write"
+    elif mutation in {"stage", "reason"}:
+        payload["failure"][mutation] = secret
+    elif mutation == "count":
+        payload["failure"]["completed_bytes"] = True
+    elif mutation == "total":
+        payload["failure"]["total_bytes"] = 1
+    output = (secret if mutation == "malformed" else
+              secret * 7000 if mutation == "overflow" else json.dumps(payload))
+    script = tmp_path / "failed.py"
+    count = tmp_path / "calls.txt"
+    script.write_text("import sys\nfrom pathlib import Path\n"
+                      f"p=Path({str(count)!r})\np.write_text(p.read_text()+'x' if p.exists() else 'x')\n"
+                      f"print({output!r})\nprint({secret!r},file=sys.stderr)\n"
+                      f"sys.exit({0 if mutation == 'zero' else 1})\n")
+    tool = FirmwareTool(RuntimeSettings(data_dir=tmp_path))
+    tool.command = [sys.executable, str(script)]
+    with pytest.raises(DeviceError) as raised:
+        await tool.run("backup", timeout=5)
+    message = str(raised.value)
+    assert "no Flash was written" in message
+    assert secret not in message
+    if mutation is None:
+        assert "Flash reading (262144/4194304 bytes completed): transfer stopped" in message
+    else:
+        assert "bytes completed" not in message and "during Flash reading" not in message
+    assert count.read_text() == "x"  # A failed process is never replayed.
+
+
+@pytest.mark.parametrize("operation", ["backup", "write"])
+async def test_subprocess_timeout_message_distinguishes_read_only_and_write(tmp_path, operation):
+    script = tmp_path / "slow.py"
+    script.write_text("import time\ntime.sleep(60)\n")
+    tool = FirmwareTool(RuntimeSettings(data_dir=tmp_path))
+    tool.command = [sys.executable, str(script)]
+    with pytest.raises(DeviceError) as raised:
+        await tool.run(operation, timeout=.2)
+    assert "timed out" in str(raised.value)
+    assert ("no Flash was written" in str(raised.value)) is (operation == "backup")
+    assert ("Keep the backup" in str(raised.value)) is (operation == "write")
+
+
+async def test_failed_write_verification_keeps_result_uncertain(tmp_path):
+    payload = {"ok": False, "protocol": "android-agent-firmware-v1", "error": "operation_failed",
+               "operation": "write", "failure": {"stage": "verify", "reason": "digest_mismatch"}}
+    script = tmp_path / "verify.py"
+    script.write_text(f"import sys\nprint({json.dumps(payload)!r})\nsys.exit(1)\n")
+    tool = FirmwareTool(RuntimeSettings(data_dir=tmp_path))
+    tool.command = [sys.executable, str(script)]
+    with pytest.raises(DeviceError) as raised:
+        await tool.run("write", timeout=5)
+    assert "read-back verification: digest mismatch" in str(raised.value)
+    assert "Keep the backup" in str(raised.value) and "no Flash was written" not in str(raised.value)

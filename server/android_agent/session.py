@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from .ble import BleController, Calibration, PointerProbe, SerialBridge
+from .ble import BleController, Calibration, PointerProbe, SerialBridge, normalize_firmware
 from .controller import AdbController
 from .errors import DeviceError
 from .models import Action
@@ -118,7 +118,7 @@ class DeviceSession:
                 self.controller = controller(bridge, self.serial, calibration)
                 await bridge.open()
 
-    async def calibrate(self, calibration: Calibration) -> None:
+    async def calibrate(self, calibration: Calibration) -> Calibration:
         self.guard_manual()
         if self._lock.locked() or self._stopping:
             raise DeviceError("Stop the current operation before changing calibration")
@@ -132,7 +132,12 @@ class DeviceSession:
                 )
             frame = await self.screen.capture(force=True)
             calibration.check(frame)
-            self.controller.calibration = calibration
+            firmware = normalize_firmware(self.controller.bridge.firmware)
+            if not firmware or (calibration.firmware and calibration.firmware != firmware):
+                raise DeviceError("Calibration firmware differs from the connected board; recalibrate")
+            saved = calibration.model_copy(update={"firmware": firmware})
+            self.controller.calibration = saved
+            return saved
 
     async def locate(self, probe: PointerProbe) -> dict:
         self.guard_manual()
@@ -146,12 +151,22 @@ class DeviceSession:
             self._active = asyncio.current_task()
             try:
                 return await self.controller.locate(probe)
+            except asyncio.CancelledError:
+                if epoch != self._epoch:
+                    raise DeviceError("Operation cancelled by stop; observe the phone before further input") from None
+                raise
             finally:
                 self._active = None
 
     async def execute(self, action: Action, frame: Frame | None = None) -> dict:
-        result, _ = await self._execute(action, frame)
-        return result
+        epoch = self._epoch
+        try:
+            result, _ = await self._execute(action, frame)
+            return result
+        except asyncio.CancelledError:
+            if epoch != self._epoch:
+                raise DeviceError("Operation cancelled by stop; observe the phone before further input") from None
+            raise
 
     async def execute_agent(self, owner, action: Action, reference: Frame,
                             on_submit=None) -> tuple[dict, Frame]:
@@ -187,10 +202,12 @@ class DeviceSession:
                     self.screen.validate_reference(action.frame_id, current)
                 if action.action not in self.controller.capabilities:
                     raise DeviceError("Action is unavailable for the selected controller")
-                if isinstance(self.controller, BleController) and action.action in {"tap", "long_press", "swipe", "scroll"}:
+                if isinstance(self.controller, BleController) and action.action in {"tap", "long_press", "swipe", "scroll", "path", "circle"}:
                     if not self.controller.calibration:
                         raise DeviceError("Calibrate the HID mouse before coordinate actions")
                     self.controller.calibration.check(current)
+                    if action.action in {"path", "circle"}:
+                        self.controller.stroke_args(action, current)
                 if on_submit:
                     on_submit(current)
                 timing = await self.controller.execute(action, current)

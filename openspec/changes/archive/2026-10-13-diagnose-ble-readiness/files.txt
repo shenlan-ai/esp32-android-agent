@@ -1,0 +1,13 @@
+hardware/ble_bridge/include/ble_diagnostics.h
+hardware/ble_bridge/src/main.cpp
+hardware/ble_bridge/tests/ble_diagnostics_test.cpp
+hardware/PROTOCOL.md
+scripts/tests/test_firmware_engine.py
+server/android_agent/ble.py
+server/android_agent/static/app.js
+server/android_agent/static/board-status.js
+server/android_agent/static/i18n.js
+server/tests/test_ble.py
+server/tests/board-status.test.mjs
+docs/BLE-SETUP.md
+openspec/specs/ble-readiness-diagnostics/spec.md

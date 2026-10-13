@@ -1,0 +1,4 @@
+server/android_agent/session.py
+server/tests/test_control.py
+server/tests/test_app.py
+openspec/specs/manual-control/spec.md

@@ -1,8 +1,8 @@
 import importlib.util
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 from subprocess import CompletedProcess
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("identify_board", Path(__file__).parents[1] / "identify_board.py")
 module = importlib.util.module_from_spec(spec)

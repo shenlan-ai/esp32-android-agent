@@ -1,0 +1,11 @@
+README.md
+README.en.md
+.gitignore
+SECURITY.md
+docs/RELEASING.md
+docs/USAGE.en.md
+docs/AGENT-USAGE.md
+docs/EXAMPLES.md
+docs/COMPATIBILITY.md
+docs/PORTABLE.md
+docs/images/*

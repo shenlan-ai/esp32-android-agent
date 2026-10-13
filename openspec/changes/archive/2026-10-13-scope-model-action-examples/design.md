@@ -1,0 +1,6 @@
+## Decisions
+将静态ACT_PROMPT拆为通用坐标/规则文本、每个严格合法输入示例及元决策示例。按每次observe时同一context中的capabilities过滤示例；只匹配固定主机字典，不插入控制器/模型任意文本。通用path/circle解释仅当对应能力出现时加入。plan及verify保持原图/指令，元决策始终列出且不放宽MetaDecision字段。
+
+示例不是设备兼容承诺或行为保护边界，parse_decision和execute_agent仍在真实输入前检查能力。参数类型、附加字段和动作结构保持原约束，不自动修正模型响应、不对不支持动作进行自动替代或重放。已有hello新内容有限验收只导航/核验，不重复创建或输入。
+## Validation
+pytest真实TaskRunner捕获发送模型的system/text，针对各可用能力检查实际示例集合、无伪导航、严格合法示例及元决策；空能力实际start保持提前拒绝且零模型调用，另验证空能力提示仅含元决策；不只镜像字符串实现。元done仍需要独立goal_check，false时不能完成。适用Python3.10/3.12回归与Ruff、strict/范围/diff后记录和归档。

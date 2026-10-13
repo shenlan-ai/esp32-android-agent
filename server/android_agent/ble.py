@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from typing import Literal
 
@@ -11,12 +12,31 @@ from serial.tools import list_ports
 
 from .async_utils import wait_for
 from .errors import DeviceError
-from .models import Action
+from .models import MAX_PATH_REPORTS, Action
 from .screen import Frame
 
 PROTOCOL = 1
 KEYS = {"enter", "backspace", "esc", "tab", "space", "up", "down", "left", "right"}
-CAPABILITIES = {"tap", "swipe", "long_press", "scroll", "type", "key", "wait"}
+CAPABILITIES = {"tap", "swipe", "path", "long_press", "scroll", "type", "key", "wait"}
+FIRMWARE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}")
+
+
+def normalize_firmware(value: object) -> str:
+    if not isinstance(value, str) or not FIRMWARE_ID.fullmatch(value) or value.lower() == "unknown":
+        return ""
+    return value
+
+
+def normalize_ble_state(value: object) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    flags = ("link", "authenticated", "keyboard_subscribed", "mouse_subscribed")
+    if any(type(value.get(key)) is not bool for key in flags) or "auth_error" not in value:
+        return None
+    error = value["auth_error"]
+    if error is not None and (type(error) is not int or not 0 <= error <= 255):
+        return None
+    return {**{key: value[key] for key in flags}, "auth_error": error}
 
 
 def serial_ports() -> list[dict]:
@@ -34,6 +54,12 @@ class Calibration(BaseModel):
     height: StrictInt = Field(ge=1, le=20000)
     counts_x: StrictInt = Field(ge=100, le=4000)
     counts_y: StrictInt = Field(ge=100, le=4000)
+    firmware: str = Field("", max_length=64)
+
+    def compatible_firmware(self, firmware: str) -> bool:
+        return bool(normalize_firmware(firmware)) and (self.firmware == firmware or (
+            not self.firmware and firmware == "0.1.0"
+        ))
 
     def check(self, frame: Frame) -> None:
         if (self.phone, self.width, self.height) != (frame.serial, frame.width, frame.height):
@@ -71,6 +97,7 @@ class SerialBridge:
         self.device = None
         self.session = ""
         self.ble_connected = False
+        self.ble_state: dict | None = None
         self.capabilities: list[str] = []
         self.firmware = ""
         self._next_id = 0
@@ -100,6 +127,7 @@ class SerialBridge:
             "hid_ready": self.hid_ready,
             "firmware": self.firmware,
             "ble_name": "Android Agent BLE",
+            "ble_state": dict(self.ble_state) if self.connected and self.ble_state else None,
             "error": self._error,
         }
 
@@ -122,7 +150,7 @@ class SerialBridge:
             if not isinstance(caps, list) or not all(isinstance(cap, str) for cap in caps):
                 raise DeviceError("Invalid bridge capabilities")
             self.capabilities = sorted(CAPABILITIES.intersection(caps))
-            self.firmware = str(result.get("firmware", "unknown"))[:50]
+            self.firmware = normalize_firmware(result.get("firmware"))
             self._last_heartbeat = time.monotonic()
             self._heartbeat = asyncio.create_task(self._pulse())
         except (OSError, serial.SerialException) as exc:
@@ -139,6 +167,7 @@ class SerialBridge:
             return
         self._error = message
         self.ble_connected = False
+        self.ble_state = None
         for future in tuple(self._pending.values()):
             if not future.done():
                 future.set_exception(DeviceError(message))
@@ -162,6 +191,10 @@ class SerialBridge:
             self._fail("Invalid HID connection state")
             return
         self.ble_connected = response[self.ready_field]
+        self.ble_state = (
+            normalize_ble_state(response.get("ble_state"))
+            if self.ready_field == "ble_connected" else None
+        )
         if response.get("status") == "heartbeat":
             self._last_heartbeat = time.monotonic()
         if response.get("error") in {"stale_session", "heartbeat_expired", "ble_disconnected",
@@ -316,9 +349,9 @@ class BleController:
         if not self.bridge.connected or not self.bridge.hid_ready:
             return []
         caps = self.bridge.capabilities
-        if not self.calibration:
+        if not self.calibration or not self.calibration.compatible_firmware(self.bridge.firmware):
             return [cap for cap in caps if cap in {"type", "key", "wait"}]
-        return caps
+        return sorted({*caps, "circle"}) if "path" in caps else caps
 
     async def execute(self, action: Action, frame: Frame) -> dict:
         if action.action not in self.capabilities:
@@ -329,7 +362,9 @@ class BleController:
             raise DeviceError("HID board is bound to a different phone")
         name = action.action
         args = {"action": name}
-        if name in {"tap", "long_press", "swipe", "scroll"}:
+        if name in {"path", "circle"}:
+            args = self.stroke_args(action, frame)
+        elif name in {"tap", "long_press", "swipe", "scroll"}:
             if not self.calibration:
                 raise DeviceError("Calibrate the HID mouse before coordinate actions")
             self.calibration.check(frame)
@@ -349,17 +384,34 @@ class BleController:
             args["key"] = action.key
         else:
             args["duration_ms"] = action.duration_ms
-        result = await self.bridge.request("action", **args)
+        timeout = 60 if self.mode == "ble" and name in {"tap", "long_press", "swipe", "scroll", "path", "circle"} else 30
+        result = await self.bridge.request("action", timeout=timeout, **args)
         return {
             key: value
             for key in ("elapsed_ms", "button_held_ms")
             if type(value := result.get(key)) is int and 0 <= value <= 60000
         }
 
+    def stroke_args(self, action: Action, frame: Frame) -> dict:
+        if not self.calibration:
+            raise DeviceError("Calibrate the HID mouse before coordinate actions")
+        self.calibration.check(frame)
+        try:
+            normalized = action.stroke_points(frame.width, frame.height)
+        except ValueError as exc:
+            raise DeviceError("Circle extends outside the screen") from exc
+        points = [self.calibration.point(x, y) for x, y in normalized]
+        reports = sum((max(abs(bx-ax), abs(by-ay)) + 7) // 8
+                      for (ax, ay), (bx, by) in zip(points, points[1:], strict=False))
+        if reports > MAX_PATH_REPORTS:
+            raise DeviceError("Continuous stroke exceeds the HID movement limit; use a shorter path")
+        return {"action": "path", "points": points, "duration_ms": action.duration_ms}
+
     async def locate(self, probe: PointerProbe) -> dict:
         if not self.bridge.connected or not self.bridge.hid_ready:
             raise DeviceError("Connect the HID board to the phone first")
-        await self.bridge.request("action", action="locate", x=probe.x, y=probe.y)
+        await self.bridge.request("action", timeout=60 if self.mode == "ble" else 30,
+                                  action="locate", x=probe.x, y=probe.y)
         return {"ok": True}
 
     async def stop(self) -> dict:

@@ -32,7 +32,9 @@
 - **THEN** 关闭该连接并释放占用，无未处理异常且不影响其他客户端
 
 ### Requirement: Explicit phone binding and USB calibration
-系统 SHALL 提供 usb 控制模式，只绑定在线无线 ADB 手机并要求用户确认板子插入该手机。校准 MUST 按板子身份、手机和画面尺寸区分，与 BLE 校准独立；未校准不开放坐标动作。
+系统 SHALL 提供 usb 控制模式，只绑定在线无线 ADB 手机并要求用户确认板子插入该手机。校准 MUST 按板子身份、手机、画面尺寸及实际握手固件区分，与 BLE 校准独立；未校准或固件版本失配不开放坐标动作。保存校准 MUST 使用有效握手版本且拒绝请求伪造版本。
+
+握手版本 MUST 为1至64字符ASCII标识，首字符为字母或数字，其余只含字母、数字、点、下划线、加号或连字符，且不是大小写无关的unknown占位。缺失或非法版本 MUST 保持未知，不转换/截断生成可匹配版本；未知版本 SHALL 拒绝保存校准和开放坐标能力，保留已有校准及不依赖坐标的键盘能力。历史无固件字段校准仅适用于0.1.0。
 
 #### Scenario: USB ADB selected
 - **WHEN** 用户尝试给 USB ADB 设备绑定 S3 USB 控制
@@ -41,6 +43,14 @@
 #### Scenario: Board reconnects or screen rotates
 - **WHEN** 板子建立新 TCP 会话或画面尺寸改变
 - **THEN** 不自动恢复旧动作，用户显式重绑；旧尺寸校准拒绝坐标动作
+
+#### Scenario: Firmware version is missing or malformed
+- **WHEN** 认证后的USB握手缺失版本、返回unknown占位、非字符串或不符合标识边界
+- **THEN** 保持版本未知，保存校准拒绝且公开未校准、不列坐标能力，已有校准保留而键盘仍可用
+
+#### Scenario: Firmware version changes
+- **WHEN** 实际握手版本与已有校准不匹配或保存请求提供不同非空版本
+- **THEN** 不开放坐标能力或覆盖现有校准，用户重新实测校准后保存实际握手版本
 
 ### Requirement: Interruptible HID with explicit outcomes
 固件 SHALL 使用 JSON v1、随机会话、动作编号去重和一个非阻塞动作；持续处理停止和 1500ms 心跳看门狗。网络、USB 或心跳失效 MUST 取消动作并释放键鼠；主机取消或超时不重放，结果区分接受、报告完成、释放未确认和手机画面核验。Python3.10及以上版本的网络发送超时 MUST 使连接失效、报告未知且不重放；网络关闭等待 MUST 有界。
@@ -60,3 +70,16 @@
 #### Scenario: Completion races with caller cancellation
 - **WHEN** 支持Python版本中有时限的等待完成与外层取消同时到达
 - **THEN** 系统 MUST 保留取消并回收等待任务，不能继续执行循环或阻塞停止
+
+### Requirement: Native USB preserves relative motion vectors
+原生USB SHALL 使用共享整数线段插值，使不同两轴位移按相同段进度同步完成；每轴每报告绝对值不超过8，累计目标线段误差每轴不超过0.5个HID计数，最终位移精确。固件 MUST 保持10ms运动节奏、可取消单步调度和严格参数校验，算法改变 MUST 提升握手及CDC版本并要求重新校准；未实测的手机像素精度保持未验证。
+
+#### Scenario: USB executes a shallow signed vector
+- **WHEN** 原生USB执行长轴与短轴不同的定位或拖动
+- **THEN** 实际共享调度报告保持线段比例及端点，旧固件校准不开放新版坐标能力
+
+### Requirement: Native USB continuous stroke parity
+S3原生USB SHALL 声明并采用共享有界多点path能力，保持2–20点、严格0–4000整数、500报告限制、一次按下/释放及10ms节奏，主机30秒期限及原认证/会话/取消规则不变。固件 MUST 提升握手及CDC版本并要求新校准，未经实机验证不声称手机连续绘图兼容。
+#### Scenario: USB draws a closed path
+- **WHEN** 已认证USB控制器收到合法闭合路径
+- **THEN** 共享调度器连续通过各点并回到起点后释放，取消立即停止余下段

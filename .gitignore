@@ -1,5 +1,8 @@
+# Reference checkout, never a runtime dependency
 /esp32-iphone-agent/
+# Environments and generated build/test output
 .venv/
+venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -10,11 +13,32 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.*.example
 secrets.h
 *.local.json
+*.private.json
+*.private.jsonl
+# User data may contain model keys, Wi-Fi credentials, phone screenshots or flash contents
 traces/
 .runtime-local/
+.esp32-android-agent/
+/settings.json
+/preferences.json
+/tasks/
+/firmware-backups/
+/firmware-jobs/
+/firmware-catalog/
+/platform-tools/
+*.flash-backup.bin
+# Local editor/OS and packaging caches; source manifests and documentation images stay tracked
+.idea/
+.vscode/
+node_modules/
+*.log
+*.spec.tmp
 .coverage
 htmlcov/
 .pio/
 .DS_Store
+Thumbs.db
+Desktop.ini

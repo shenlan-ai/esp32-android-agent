@@ -1,0 +1,6 @@
+scripts/phone_input_fixture.py
+docs/acceptance/2026-10-13-redmi-note14-ble.md
+docs/COMPATIBILITY.md
+docs/BLE-SETUP.md
+docs/ACCEPTANCE.md
+openspec/specs/continuous-validation/spec.md

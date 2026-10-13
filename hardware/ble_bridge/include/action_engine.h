@@ -5,6 +5,9 @@
 constexpr uint32_t HID_REPORT_MS = 10;
 constexpr int HID_STEP = 8;
 constexpr uint32_t HID_WATCHDOG_MS = 1500;
+constexpr size_t HID_PATH_POINTS = 20;
+constexpr int HID_PATH_REPORTS = 500;
+struct HidPoint { int x = 0, y = 0; };
 
 enum class CommandDisposition { Duplicate, Old, Busy, New };
 inline CommandDisposition classifyCommand(uint32_t id, uint32_t previous, bool active) {
@@ -16,13 +19,39 @@ inline bool heartbeatExpired(uint32_t now, uint32_t received) {
     return uint32_t(now - received) > HID_WATCHDOG_MS;
 }
 
+struct MotionSegment {
+    // Protocol-bounded axes (±4000) keep products within 32-bit integers.
+    // Both axes use one progress denominator; independent clipping bends lines.
+    int totalX = 0, totalY = 0, steps = 0, index = 0, reachedX = 0, reachedY = 0;
+    void start(int x, int y) {
+        totalX = x; totalY = y; index = reachedX = reachedY = 0;
+        int ax = x < 0 ? -x : x, ay = y < 0 ? -y : y;
+        steps = ((ax > ay ? ax : ay) + HID_STEP - 1) / HID_STEP;
+    }
+    static int position(int total, int index, int steps) {
+        int magnitude = total < 0 ? -total : total;
+        int value = (magnitude * index + steps / 2) / steps;
+        return total < 0 ? -value : value;
+    }
+    void next(int &x, int &y) {
+        ++index;
+        int targetX = position(totalX, index, steps), targetY = position(totalY, index, steps);
+        x = targetX - reachedX; y = targetY - reachedY;
+        reachedX = targetX; reachedY = targetY;
+    }
+};
+
 template<class Text> struct ScheduledJob {
     bool active = false;
     uint32_t id = 0, nextAt = 0, interval = HID_REPORT_MS, duration = 0;
+    uint32_t motionInterval = HID_REPORT_MS, homeSettleMs = 0;
     uint32_t startedAt = 0, pressedAt = 0, releaseAt = 0, elapsedMs = 0, heldMs = 0;
     bool hasPressed = false;
     Text kind, text;
     int stage = 0, homeLeft = 0, dx = 0, dy = 0, endX = 0, endY = 0;
+    MotionSegment motion;
+    HidPoint points[HID_PATH_POINTS];
+    size_t pointCount = 0, pointIndex = 1;
     size_t textIndex = 0;
     uint8_t key = 0, modifiers = 0;
 };
@@ -47,7 +76,6 @@ inline bool asciiHid(char c, uint8_t &key, uint8_t &mods) {
     return false;
 }
 inline int hidAbs(int value) { return value < 0 ? -value : value; }
-inline int hidDelta(int value) { return value < -HID_STEP ? -HID_STEP : value > HID_STEP ? HID_STEP : value; }
 
 // One call emits at most one motion/keyboard step. The serial loop owns cancellation.
 template<class Text, class Sink> void advanceHid(ScheduledJob<Text> &job, uint32_t now, Sink &sink) {
@@ -56,10 +84,22 @@ template<class Text, class Sink> void advanceHid(ScheduledJob<Text> &job, uint32
     if (job.stage == 0) {
         if (job.homeLeft-- > 0) { sink.mouse(-127, -127, 0); return; }
         job.stage = 1;
+        job.interval = job.motionInterval;
+        job.nextAt = now + job.interval;
+        if (job.homeSettleMs) { job.nextAt = now + job.homeSettleMs; return; }
     }
     if (job.stage == 1 || job.stage == 3) {
+        // Skip repeated points without releasing or adding catch-up reports.
+        while (job.stage == 3 && job.kind == "path" && !job.dx && !job.dy
+                && job.pointIndex < job.pointCount) {
+            const auto &previous = job.points[job.pointIndex - 1];
+            const auto &target = job.points[job.pointIndex++];
+            job.dx = target.x - previous.x; job.dy = target.y - previous.y;
+            job.motion.start(job.dx, job.dy);
+        }
         if (job.dx || job.dy) {
-            int sx = hidDelta(job.dx), sy = hidDelta(job.dy);
+            if (!job.motion.steps) job.motion.start(job.dx, job.dy);
+            int sx, sy; job.motion.next(sx, sy);
             sink.mouse(sx, sy, 0); job.dx -= sx; job.dy -= sy; return;
         }
         if (job.stage == 3) {
@@ -74,9 +114,11 @@ template<class Text, class Sink> void advanceHid(ScheduledJob<Text> &job, uint32
         if (job.kind == "scroll") { sink.mouse(0, 0, job.endY); sink.finish(); return; }
         sink.press();
         job.hasPressed = true; job.pressedAt = now; job.releaseAt = now + job.duration;
-        if (job.kind == "swipe") {
-            job.dx = job.endX; job.dy = job.endY; job.stage = 3;
-            job.interval = HID_REPORT_MS;
+        if (job.kind == "swipe" || job.kind == "path") {
+            job.dx = job.kind == "path" ? 0 : job.endX;
+            job.dy = job.kind == "path" ? 0 : job.endY; job.stage = 3;
+            job.motion.start(job.dx, job.dy);
+            job.interval = job.motionInterval;
             job.nextAt = now + job.interval;
         } else { job.stage = 4; job.nextAt = now + job.duration; }
         return;

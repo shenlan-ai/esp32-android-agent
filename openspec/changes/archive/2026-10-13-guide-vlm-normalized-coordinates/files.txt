@@ -1,0 +1,6 @@
+server/android_agent/screen.py
+server/android_agent/agent.py
+server/tests/test_screen.py
+server/tests/test_agent.py
+docs/acceptance/2026-10-13-redmi-note14-ble.md
+openspec/specs/agent-execution/spec.md

@@ -1,0 +1,7 @@
+.github/workflows/ci.yml
+scripts/check_workflows.py
+scripts/tests/test_check_workflows.py
+server/pyproject.toml
+docs/DEVELOPMENT.md
+docs/COMPATIBILITY.md
+openspec/specs/continuous-validation/spec.md

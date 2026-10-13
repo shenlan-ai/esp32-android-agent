@@ -4,6 +4,8 @@
 
 Version 0.1 needs at least one real phone/board/model acceptance record. This is an unexecuted checklist, not a passed report. Firmware flashing, board communication, simulation and packaging do not prove phone-side input. Keep Android 15/16/17 targets separate from the specific devices actually tested.
 
+进行中的实际记录见 [Redmi Note14 / Android15 / 经典ESP32](acceptance/2026-10-13-redmi-note14-ble.md)，其中保留输入法转换和坐标校准失败。贡献者可用`scripts/phone_input_fixture.py`准备无外部提交的本机输入页面，具体准备与清理见 [BLE说明](BLE-SETUP.md)。模板仍是待执行清单，不因新增部分证据自动全部通过。
+
 ## 1. 条件 / Conditions
 
 复制下列字段到本机报告，保留代码与环境版本。不要填API Key、无线配对码、Wi-Fi密码、完整设备MAC/序列号或私人截图。给设备使用测试编号即可。

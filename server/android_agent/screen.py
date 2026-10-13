@@ -6,7 +6,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 
-from PIL import Image, ImageChops, UnidentifiedImageError
+from PIL import Image, ImageChops, ImageDraw, UnidentifiedImageError
 
 from .errors import ScreenError, StaleFrameError
 from .models import Action
@@ -76,6 +76,27 @@ def difference(a: Frame, b: Frame) -> float:
             images.append(image.convert("L").resize((64, 128)))
     pixels = ImageChops.difference(*images).tobytes()
     return sum(pixels) / len(pixels)
+
+
+def coordinate_image(frame: Frame) -> bytes:
+    """Annotate only the actor's copy, in the full screenshot's 0..1000 space."""
+    with Image.open(io.BytesIO(frame.jpeg)) as source:
+        image = source.convert("RGB")
+    width, height = image.size
+    draw = ImageDraw.Draw(image, "RGBA")
+    for value in range(0, 1001, 100):
+        x, y = round(value * (width - 1) / 1000), round(value * (height - 1) / 1000)
+        draw.line((x, 0, x, height - 1), fill=(0, 105, 200, 90))
+        draw.line((0, y, width - 1, y), fill=(0, 105, 200, 90))
+        label = str(value)
+        box = draw.textbbox((0, 0), label)
+        tw, th = box[2] - box[0] + 4, box[3] - box[1] + 4
+        for lx, ly in [(min(x, width - tw), 0), (0, min(y, height - th))]:
+            draw.rectangle((lx, ly, lx + tw, ly + th), fill=(0, 65, 130, 240))
+            draw.text((lx + 2, ly + 2 - box[1]), label, fill=(255, 255, 255, 255))
+    output = io.BytesIO()
+    image.save(output, "JPEG", quality=90)
+    return output.getvalue()
 
 
 def validate_decision(reference: Frame, current: Frame, action: Action) -> None:

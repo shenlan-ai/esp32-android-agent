@@ -38,7 +38,7 @@ Portable packages include the separate GPL firmware tool and image catalog. Sour
 
 ### Classic ESP32 BLE
 
-Keep the board connected to the computer. On the phone, pair **Android Agent BLE** in Bluetooth settings. Connect the phone through USB or wireless ADB and select it in the workbench. Confirm that this board is paired with that phone, then choose **Use BLE control**. No board Wi-Fi is needed. The connected COM5 classic board has firmware 0.1.0 and passed board communication checks; its phone-side input remains unaccepted. See [BLE setup](BLE-SETUP.md) for the build/protocol details.
+Keep the board connected to the computer. On the phone, pair **Android Agent BLE** in Bluetooth settings. Connect the phone through USB or wireless ADB and select it in the workbench. Confirm that this board is paired with that phone, then choose **Use BLE control**. No board Wi-Fi is needed. Readiness requires the Bluetooth link, authentication and both keyboard/mouse report subscriptions; the phone saying “connected” alone is insufficient. Reconnect or forget and pair again if subscriptions are missing, then explicitly rebind the board in the workbench. The tested ESP32-D0WD-V3 / 4MB board runs BLE 0.1.4 and has Android 15 input evidence. See [compatibility](COMPATIBILITY.md) and [BLE setup](BLE-SETUP.md).
 
 ### ESP32-S3 native USB
 
@@ -51,6 +51,8 @@ Use a trusted LAN and allow the board listener through the computer's private-ne
 If available, disable phone pointer acceleration. The horizontal/vertical edge probes return the pointer to the top-left and move a specified count; they do not click. Reduce the count toward the threshold that just reaches the edge, then save calibration for the current phone, board/mode and screenshot dimensions. Check actual center and edge targets. Edge calibration is not proof of accuracy across the entire screen.
 
 Rotation, pointer-speed changes or another phone can invalidate calibration. Recheck before starting tasks. Use [the acceptance checklist](ACCEPTANCE.md); software simulation and firmware read-back cannot prove phone input.
+
+BLE 0.1.4 / USB 0.1.2 expose continuous `path` and `circle` only with the required controller capability and calibration. A path has 2–20 points; a stroke holds the button across segments and releases at the end or on stop. ADB and older firmware do not expose these drawing actions. Relative HID motion is not an absolute touch digitizer; test precision on your phone. Text is printable ASCII, and you must switch your input method to English yourself; automatic IME switching is not implemented.
 
 ## Configure a vision model
 

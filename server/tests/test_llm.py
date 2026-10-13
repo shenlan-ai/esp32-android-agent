@@ -7,8 +7,10 @@ import pytest
 from android_agent.config import ModelSettings
 from android_agent.llm import (
     ModelClient,
+    ModelCompletionError,
     ModelError,
     ModelProtocolError,
+    estimate_tokens,
     parse_decision,
     parse_object,
 )
@@ -67,6 +69,73 @@ async def test_missing_usage_is_explicit_estimate():
     try:
         result = await client.chat("a", "b", [b"image"])
         assert result.usage.estimated and result.usage.total_tokens >= 4096
+    finally:
+        await client.close()
+
+
+async def test_truncated_completion_cannot_supply_a_valid_action():
+    calls = 0
+    def handle(request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json={"choices": [{"finish_reason": "length", "message": {
+            "content": '{"action":"tap","x":500,"y":500,"reason":"x","expected":"y"}'}}],
+            "usage": {"total_tokens": 123}})
+    client = ModelClient(ModelSettings(model="vision"), httpx.MockTransport(handle))
+    try:
+        with pytest.raises(ModelProtocolError, match="output limit"):
+            await client.chat("Choose an action", "Goal")
+    finally:
+        await client.close()
+    assert calls == 1
+
+
+@pytest.mark.parametrize("finish,fields", [
+    ("length", {"content": ""}), ("length", {"content": None}),
+    ("content_filter", {}), ("tool_calls", {}), ("function_call", {}),
+    ("stop", {"tool_calls": [{"private-key": "secret tool arguments"}]}),
+    ("stop", {"function_call": {"name": "private-key"}}),
+    ("stop", {"refusal": "private-key provider refusal"}),
+    (None, {"refusal": "private-key"}), ("private-key", {}),
+    (True, {}), ([], {}), ({"private-key": 1}, {}),
+])
+async def test_non_normal_completions_are_redacted_and_preserve_real_usage(finish, fields):
+    captured = []
+    def handle(request):
+        captured.append(request)
+        return httpx.Response(200, json={"choices": [{"finish_reason": finish,
+            "message": {"content": "{}", **fields}}],
+            "usage": {"prompt_tokens": 50, "completion_tokens": 70}})
+    client = ModelClient(ModelSettings(model="vision"), httpx.MockTransport(handle))
+    try:
+        with pytest.raises(ModelCompletionError) as caught:
+            await client.chat("System", "Goal")
+        assert caught.value.usage.total_tokens == 120 and not caught.value.usage.estimated
+        assert caught.value.seconds >= 0 and "private-key" not in str(caught.value)
+    finally:
+        await client.close()
+    assert len(captured) == 1
+
+
+@pytest.mark.parametrize("metadata", [{}, {"finish_reason": None}, {"finish_reason": "stop"}])
+async def test_legacy_and_normal_completions_still_require_valid_json(metadata):
+    client = ModelClient(ModelSettings(model="vision"), httpx.MockTransport(lambda request: httpx.Response(
+        200, json={"choices": [{**metadata, "message": {"content": "{}", "tool_calls": [], "refusal": None}}]})))
+    try:
+        assert parse_object((await client.chat("System", "Goal")).text) == {}
+    finally:
+        await client.close()
+
+
+async def test_truncated_completion_without_usage_is_accounted_as_estimate():
+    client = ModelClient(ModelSettings(model="vision", extra_body={"max_completion_tokens": 2048}),
+        httpx.MockTransport(lambda request: httpx.Response(
+        200, json={"choices": [{"finish_reason": "length", "message": {"content": None}}]})))
+    try:
+        with pytest.raises(ModelCompletionError) as caught:
+            await client.chat("System", "Goal", [b"image"])
+        assert caught.value.usage.estimated
+        assert caught.value.usage.total_tokens == estimate_tokens("System", "Goal", [b"image"]) + 2048
     finally:
         await client.close()
 

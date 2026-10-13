@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-from typing import Literal
+import math
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 Coordinate = StrictInt
+StrokeCoordinate = Annotated[StrictInt, Field(ge=0, le=1000)]
+MAX_PATH_POINTS = 20
+MAX_PATH_REPORTS = 500
 ACTION_FIELDS = {
     "tap": {"x", "y"},
     "long_press": {"x", "y", "duration_ms"},
     "swipe": {"x1", "y1", "x2", "y2", "duration_ms"},
+    "path": {"points", "duration_ms"},
+    "circle": {"x", "y", "r", "duration_ms"},
     "scroll": {"x", "y", "lines"},
     "type": {"text"},
     "key": {"key"},
@@ -35,7 +41,7 @@ KEYS = {
 class Action(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: Literal[
-        "tap", "swipe", "long_press", "scroll", "type", "key", "home", "back", "recents", "wait"
+        "tap", "swipe", "path", "circle", "long_press", "scroll", "type", "key", "home", "back", "recents", "wait"
     ]
     x: Coordinate | None = Field(None, ge=0, le=1000)
     y: Coordinate | None = Field(None, ge=0, le=1000)
@@ -43,6 +49,10 @@ class Action(BaseModel):
     y1: Coordinate | None = Field(None, ge=0, le=1000)
     x2: Coordinate | None = Field(None, ge=0, le=1000)
     y2: Coordinate | None = Field(None, ge=0, le=1000)
+    points: list[tuple[StrokeCoordinate, StrokeCoordinate]] | None = Field(
+        None, min_length=2, max_length=MAX_PATH_POINTS
+    )
+    r: StrictInt | None = Field(None, ge=1, le=500)
     lines: StrictInt | None = Field(None, ge=-10, le=10)
     duration_ms: StrictInt = Field(350, ge=50, le=5000)
     text: str | None = Field(None, max_length=512)
@@ -74,6 +84,22 @@ class Action(BaseModel):
         if self.action == "long_press" and self.duration_ms < 400:
             raise ValueError("long_press duration must be at least 400 ms")
         return self
+
+    def stroke_points(self, width: int, height: int) -> list[tuple[int, int]]:
+        if self.action == "path":
+            return list(self.points)
+        if self.action != "circle":
+            raise ValueError("Action is not a continuous stroke")
+        radius_y = self.r * width / height
+        if (self.x - self.r < 0 or self.x + self.r > 1000
+                or self.y - radius_y < 0 or self.y + radius_y > 1000):
+            raise ValueError("Circle extends outside the screen")
+        points = [
+            (round(self.x + self.r * math.cos(i * math.tau / 16)),
+             round(self.y + radius_y * math.sin(i * math.tau / 16)))
+            for i in range(16)
+        ]
+        return [*points, points[0]]
 
     def arguments(self) -> dict:
         return {key: getattr(self, key) for key in ACTION_FIELDS[self.action]}

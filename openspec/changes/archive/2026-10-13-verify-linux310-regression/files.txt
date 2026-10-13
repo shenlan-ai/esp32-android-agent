@@ -1,0 +1,2 @@
+docs/COMPATIBILITY.md
+docs/DEVELOPMENT.md

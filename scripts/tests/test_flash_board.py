@@ -1,4 +1,6 @@
+import hashlib
 import importlib.util
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -12,6 +14,44 @@ spec.loader.exec_module(module)
 
 
 class FlashTests(unittest.TestCase):
+    def test_complete_backup_uses_conservative_transfer_and_records_actual_digest(self):
+        data = b"\xa5" * (4 * 1024 * 1024)
+        with tempfile.TemporaryDirectory() as folder:
+            def read(command, **kwargs):
+                self.assertEqual(command[:9], ["esptool", "--port", "COM5", "--baud",
+                                              "115200", "read-flash", "0", "0x400000", command[-1]])
+                self.assertEqual(kwargs, {"check": True, "timeout": 600})
+                Path(command[-1]).write_bytes(data)
+            with patch.object(module.subprocess, "run", side_effect=read) as process, \
+                    patch("builtins.print"):
+                path = module.backup("esptool", "COM5", Path(folder))
+            process.assert_called_once()
+            self.assertEqual(path.read_bytes(), data)
+            self.assertEqual(path.with_suffix(".sha256").read_text(encoding="utf-8"),
+                             f"{hashlib.sha256(data).hexdigest()}  {path.name}\n")
+
+    def test_failed_backup_never_starts_write_or_records_complete_digest(self):
+        with tempfile.TemporaryDirectory() as folder:
+            def fail(command, **kwargs):
+                Path(command[-1]).write_bytes(b"partial")
+                raise subprocess.CalledProcessError(1, command)
+            with patch.object(sys, "argv", ["flash_board", "--port", "COM5", "--esptool", "esptool",
+                                            "--write", "--confirm-overwrite", "--backup-dir", folder]), \
+                    patch.object(module, "probe", return_value={"family": "esp32", "flash_size": "4MB"}), \
+                    patch.object(module, "images", return_value=["0x10000", "app.bin"]), \
+                    patch.object(module.subprocess, "run", side_effect=fail) as process, \
+                    patch("builtins.print"):
+                self.assertEqual(module.main(), 1)
+            process.assert_called_once()
+            self.assertEqual(process.call_args.args[0][5], "read-flash")
+            self.assertEqual(list(Path(folder).glob("*.sha256")), [])
+
+    def test_write_retains_existing_baud_and_bounded_timeout(self):
+        with patch.object(module.subprocess, "run") as process:
+            module.run("esptool", "COM5", "write-flash", "0x10000", "app.bin")
+        process.assert_called_once_with(["esptool", "--port", "COM5", "--baud", "460800",
+                                         "write-flash", "0x10000", "app.bin"], check=True, timeout=180)
+
     def test_classic_ota_zero_partition_is_valid_and_factory_is_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
