@@ -1,0 +1,2 @@
+README.md
+openspec/changes/correct-accelerated-demo-description/*

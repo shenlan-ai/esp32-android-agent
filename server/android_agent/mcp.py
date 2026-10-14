@@ -16,13 +16,14 @@ from PIL import Image
 from pydantic import ValidationError
 
 from .mcp_api import ObservedAction
+from .models import ACTION_FIELDS, KEYS
 
 INSTRUCTIONS = (
     "Control only the phone selected in the local Android Agent workbench. "
     "Call android_status, then android_screenshot before EVERY android_action. "
     "Use its observation_id once; coordinates are integers 0..1000 over the FULL image. "
     "After input, take a new screenshot to verify the phone result. Never replay uncertain input. "
-    "Use android_stop to cancel and release. Only advertised capabilities work. "
+    "Use android_stop to cancel and release. Only advertised capabilities and allowed_keys work. "
     "Text is printable ASCII; users manually switch the phone IME to English. "
     "Configure devices/control mode/calibration in the workbench; no automatic fallback. "
     "Running workbench tasks block MCP input; pause them before manual takeover. "
@@ -144,15 +145,37 @@ def create_server(bridge: WorkbenchBridge):
     server = Server("esp32-android-agent", version="0.1.0", instructions=INSTRUCTIONS,
                     lifespan=lifespan)
     schema = ObservedAction.model_json_schema()
-    schema["$defs"]["Action"]["properties"].pop("frame_id")
+    action_schema = schema["$defs"]["Action"]
+    fields = action_schema["properties"]
+    fields.pop("frame_id")
+    action_schema["description"] = (
+        "ONE built-in input action. Only use android_status.capabilities and allowed_keys. "
+        "Parameters by action (duration_ms optional, default 350): "
+        + "; ".join(f"{name}: {', '.join(sorted(params)) or 'no parameters'}" for name, params in ACTION_FIELDS.items())
+        + ". done/fail/replan are agent planning decisions, not phone inputs."
+    )
+    for name in ("x", "y", "x1", "y1", "x2", "y2"):
+        fields[name]["description"] = "Strict integer 0..1000 over the FULL screenshot, including system bars."
+    # Codex's tool-type conversion does not understand tuple prefixItems.
+    # Equivalent homogeneous pairs keep the public schema numeric for clients;
+    # ObservedAction still strictly validates each coordinate on execution.
+    pair = fields["points"]["anyOf"][0]["items"]
+    pair["items"] = pair.pop("prefixItems")[0]
+    fields["points"]["description"] = "path: 2..20 integer [x,y] pairs in 0..1000; ONE continuously pressed stroke, release at the end. Respect calibrated movement limits."
+    fields["r"]["description"] = "circle: radius in normalized x units (1..500). Preserves a round shape in screen pixels; keep the entire circle inside the image."
+    fields["duration_ms"]["description"] = "50..5000ms; long_press requires at least 400ms. Optional for swipe/path/circle/long_press/wait."
+    fields["lines"]["description"] = "scroll: nonzero integer -10..10 at x,y."
+    fields["text"]["description"] = "type: 1..512 printable ASCII characters; require visibly focused field and manually selected English IME."
+    fields["key"]["description"] = "Use one of android_status.allowed_keys; HID does not support Android navigation/media keys."
+    fields["key"]["anyOf"][0]["enum"] = sorted(KEYS)
     tools = [
-        types.Tool(name="android_status", description="Read current control mode, available actions and task/readiness state. No device selection.",
+        types.Tool(name="android_status", description="Read current control mode, capabilities, allowed_keys, action_examples, drawing rules and task/readiness state. No device selection.",
                    inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
                    annotations=types.ToolAnnotations(readOnlyHint=True, openWorldHint=False)),
         types.Tool(name="android_screenshot", description="Capture the selected phone as a JPEG image plus a single-use observation_id (60 seconds). Coordinates 0..1000 cover the FULL image. Unavailable screens trigger input release.",
                    inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
                    annotations=types.ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False)),
-        types.Tool(name="android_action", description="Execute ONE advertised action using a fresh observation_id. action is a nested object, e.g. {action: 'tap', x: 500, y: 500}. Printable ASCII only. Refresh screenshot after every action, rejection or uncertain result; never replay.",
+        types.Tool(name="android_action", description="Execute ONE built-in input through nested action: tap, swipe, path, circle, long_press, scroll, type, key, home, back, recents or wait. Use only status capabilities/allowed_keys and a fresh observation_id. path is one continuous pressed stroke; circle r is normalized x radius. Example: {action: 'tap', x: 500, y: 500}. Printable ASCII only. Refresh screenshot after every action, rejection or uncertain result; never replay.",
                    inputSchema=schema,
                    annotations=types.ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=True)),
         types.Tool(name="android_stop", description="Cancel shared workbench task/active and queued input, invalidate observations and release held keys/buttons. Returns actual release status.",

@@ -1,0 +1,14 @@
+server/android_agent/models.py
+server/android_agent/agent.py
+server/android_agent/mcp.py
+server/android_agent/mcp_api.py
+server/tests/test_mcp.py
+server/tests/test_mcp_api.py
+README.md
+README.zh-CN.md
+docs/MCP.md
+docs/acceptance/2026-10-13-codex-mcp-notes-smiley.md
+.gitignore
+.codex/config.toml
+.runtime-local/mcp-notes-*
+openspec/specs/mcp-device-tools/spec.md

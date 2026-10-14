@@ -39,7 +39,7 @@ codex mcp get android_agent
 
 | 工具 | 参数 | 结果 |
 |---|---|---|
-| `android_status` | `{}` | 实际设备在线状态、当前模式、能力、任务/维护状态、最近画面元数据；不返回序列号或模型配置 |
+| `android_status` | `{}` | 实际设备在线状态、当前模式、能力、`allowed_keys`、`action_examples`、`action_rules`、任务/维护状态、最近画面元数据；不返回序列号或模型配置 |
 | `android_screenshot` | `{}` | JPEG 图片和 JSON 文本元数据，包含 `observation_id`、原始宽高、年龄；最长边1280，保持完整截图比例 |
 | `android_action` | `{"observation_id":"…","action":{…}}` | 单次输入完成结果；需重新截图确认手机结果 |
 | `android_stop` | `{}` | 取消内部任务、当前及排队输入，使旧观察失效，报告实际输入释放结果 |
@@ -56,6 +56,23 @@ codex mcp get android_agent
 ```
 
 动作格式与现有 Action 相同，包括 `tap`、`swipe`、`long_press`、`scroll`、`type`、`key`、导航和 `wait`；`path`/`circle` 仅在当前 HID 声明且校准有效时可用。使用 `android_status.capabilities`，不能假定 ADB 支持绘图或 HID 支持安卓主页键。`type.text` 仅可打印 ASCII，输入法仍由用户手动切换英文。MCP 不接受 `action.frame_id`；用 opaque `observation_id`。
+
+MCP提供内置Agent的全部12种设备输入，均通过同一个`android_action`严格验证、串行执行。状态中的`action_examples`只包含当前可用动作，可直接作为嵌套`action`；`allowed_keys`按模式过滤，不要从schema全部枚举假定当前可用。`done`/`fail`/`replan`是内置Agent的编排决定，外部Agent自行报告完成或调整计划，无需发送到手机。设备选择、校准、模型配置和刷写属于工作台管理，不是内置Agent输入工具。
+
+| 动作 | 参数与含义 |
+|---|---|
+| `tap` | `x,y`：点击 |
+| `long_press` | `x,y,duration_ms`：长按至少400ms |
+| `swipe` | `x1,y1,x2,y2,duration_ms`：一次按住滑动 |
+| `path` | `points,duration_ms`：2..20个`[x,y]`整数点，一次持续按住，末尾释放；受校准后移动报告预算限制 |
+| `circle` | `x,y,r,duration_ms`：`r`是横向归一化半径1..500，纵向按屏幕比例换算以保持像素圆形；整个圆须在屏幕内 |
+| `scroll` | `x,y,lines`：当前位置滚动，`lines`为非零-10..10整数 |
+| `type` | `text`：1..512个可打印ASCII字符，只在已确认焦点的输入框使用 |
+| `key` | `key`：从`allowed_keys`选择 |
+| `home` / `back` / `recents` | 无参数，ADB安卓导航 |
+| `wait` | `duration_ms`：等待 |
+
+上述时长50..5000ms、默认350ms（长按需显式至少400ms）。动作需要新鲜`observation_id`，绘图每笔之间也重新截图核验，不能用多个swipe假装一条连续曲线。
 
 坐标是完整截图的 **0..1000 严格整数**，包括顶部状态栏、底部系统区域及浏览器栏；不是缩小图片的像素。`x=1000` 对应原图最右像素，`y=1000` 对应最下像素。参数、路径预算、校准仍使用已有服务端校验。
 
@@ -92,3 +109,5 @@ python server/tests/mcp_demo.py --port 8900
 - `transport_uncertain`：恢复连接，重新截图确认结果，不重放未知输入。
 
 该功能尚不提供远程MCP/OAuth、多手机控制或自动输入法切换。物理兼容性依现有[兼容表](COMPATIBILITY.md)，模拟和协议测试不能代替实机验收。
+
+新的Codex桌面会话已通过源码MCP完成小米笔记笑脸创建、连续绘图、保存与重新打开核验，并记录过期拒绝和一次列表定位错误；详见[原生笔记验收](acceptance/2026-10-13-codex-mcp-notes-smiley.md)。

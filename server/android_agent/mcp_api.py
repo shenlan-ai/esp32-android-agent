@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field
 
+from .ble import KEYS as HID_KEYS
 from .errors import DeviceError, ScreenError, StaleFrameError
-from .models import Action
+from .models import ACTION_EXAMPLES, KEYS, Action
 from .screen import Frame
 
 MAX_OBSERVATIONS = 8
@@ -70,11 +71,19 @@ def register_mcp_routes(app: FastAPI) -> None:
                                 for d in await session.adb.devices())
             except DeviceError:
                 pass
+        capabilities = list(controller.capabilities) if connected and controller and not app.state.firmware.busy else []
+        allowed_keys = HID_KEYS if controller and controller.mode in {"ble", "usb"} else set(KEYS)
         return {
             "selected": bool(session.serial),
             "connected": connected,
             "mode": controller.mode if controller else None,
-            "capabilities": controller.capabilities if connected and controller and not app.state.firmware.busy else [],
+            "capabilities": capabilities,
+            "allowed_keys": sorted(allowed_keys) if "key" in capabilities else [],
+            "action_examples": {name: ACTION_EXAMPLES[name] for name in capabilities},
+            "action_rules": {
+                **({"path": "One continuous pressed stroke through 2..20 integer [x,y] pairs; release only at the end. Long paths may exceed the calibrated movement budget."} if "path" in capabilities else {}),
+                **({"circle": "r is a radius in normalized x units (1..500), preserving a round shape in screen pixels. Keep the whole shape inside the image and within the calibrated movement budget."} if "circle" in capabilities else {}),
+            },
             "task_state": app.state.runner.state,
             "maintenance": app.state.firmware.busy,
             "hid_ready": bool(board.hid_ready) if board else None,

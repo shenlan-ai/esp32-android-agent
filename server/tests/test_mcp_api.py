@@ -114,6 +114,11 @@ def test_preview_does_not_evict_mcp_reference_but_store_is_bounded(client, fake_
     {"action": "home", "text": "extra"},
     {"action": "home", "frame_id": 1},
     {"action": "circle", "x": 500, "y": 500, "r": 100},
+    {"action": "path", "points": [["10", 20], [30, 40]]},
+    {"action": "path", "points": [[10.5, 20], [30, 40]]},
+    {"action": "path", "points": [[True, 20], [30, 40]]},
+    {"action": "path", "points": [[10, 20, 30], [30, 40]]},
+    {"action": "path", "points": [[-1, 20], [30, 40]]},
 ])
 def test_invalid_and_unsupported_actions_never_reach_phone(client, fake_adb, action):
     assert send(client, observe(client), action).status_code in {409, 422}
@@ -194,3 +199,30 @@ def test_selected_offline_phone_has_no_advertised_input(client, fake_adb):
     status = client.get("/api/mcp/status").json()
     assert status["selected"] and not status["connected"]
     assert status["capabilities"] == []
+    assert status["allowed_keys"] == []
+    assert status["action_examples"] == {}
+    assert status["action_rules"] == {}
+
+
+@pytest.mark.parametrize("limit", ["not_ready", "not_calibrated", "maintenance"])
+def test_hid_discovery_never_advertises_unavailable_inputs(client, limit):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from android_agent.ble import CAPABILITIES, KEYS, BleController, Calibration
+
+    board = SimpleNamespace(connected=True, hid_ready=limit != "not_ready", capabilities=sorted(CAPABILITIES), firmware="0.1.4",
+                            stop=AsyncMock(return_value={"release": "test_release"}), close=AsyncMock())
+    calibration = None if limit == "not_calibrated" else Calibration(
+        phone="phone1", width=200, height=400, counts_x=800, counts_y=1200, firmware="0.1.4")
+    client.app.state.session.controller = BleController(board, "phone1", calibration)
+    if limit == "maintenance":
+        client.app.state.firmware.task = SimpleNamespace(done=lambda: False)
+    try:
+        status = client.get("/api/mcp/status").json()
+    finally:
+        client.app.state.firmware.task = None
+    expected = {"type", "key", "wait"} if limit == "not_calibrated" else set()
+    assert set(status["capabilities"]) == set(status["action_examples"]) == expected
+    assert set(status["allowed_keys"]) == (KEYS if expected else set())
+    assert status["action_rules"] == {}

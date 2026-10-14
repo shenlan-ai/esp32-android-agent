@@ -1,0 +1,6 @@
+README.md
+README.zh-CN.md
+docs/images/console-workbench.png
+docs/images/README.md
+.runtime-local/readme-alarm-console*
+openspec/changes/show-alarm-in-readme-console/*

@@ -8,9 +8,9 @@
 
 An ESP32 sends keyboard and mouse input, ADB provides screenshots, and a vision model plans and verifies actions. Use the web console for manual control and built-in tasks, or expose the same device to Codex and other agents through **MCP**. The service runs locally with Python, FastAPI and static web assets. No Android companion app or root is required. **ADB control mode** lets you try it before buying a board.
 
-![Current console: phone preview, task input and execution records](docs/design/console-2026-10-13/console-desktop.png)
+![Updated Android Agent console: live workbench with the phone on its alarm list, task entry and run status](docs/images/console-workbench.png)
 
-*The redesigned console running an offline DEMO with a simulated phone. Device connection and model settings have separate navigation; emergency stop remains available in every view. [Mobile view](docs/design/console-2026-10-13/console-mobile.png) · [Design and validation notes](docs/design/console-2026-10-13/DESIGN.md). Real-device evidence appears below.*
+*Current frontend, captured from the running local console with the phone on its Clock alarm list. The saved 07:30 one-time alarm is enabled. The device identifier is redacted; this is a frontend screenshot with a live phone preview. [Image provenance](docs/images/README.md).*
 
 ## Why this design
 
@@ -105,7 +105,44 @@ The Windows x64 build contains Python, the workbench, four firmware profiles, a 
 
 ## Real phone examples
 
-![Real BLE input on a phone: browser whiteboard smiley and native hello note, including task limitations](docs/images/real-phone-cases.png)
+### Draw in native Notes through MCP
+
+The video shows the complete recorded sequence at **5× speed**: a blank Xiaomi Notes canvas, four strokes and saving. The new note was reopened and verified through MCP after recording. Input used **ESP32-D0WD-V3 / 4MB / BLE 0.1.4**, calibrated for 1080×2400. ADB supplied screenshots and native screen recording; it sent no phone input. The MP4 is 720×1512, H.264, silent and about 138 KiB.
+
+https://github.com/user-attachments/assets/a9684549-7658-43ef-bc77-612e874a5bbe
+
+[Open or download the smiley demo MP4](docs/videos/mcp-notes-smiley.mp4) · [Recording and verification](docs/acceptance/2026-10-14-mcp-smiley-recording.md)
+
+After connecting and calibrating BLE in the workbench and registering MCP, try this goal in Codex:
+
+```text
+Use android_agent MCP to create a new note in Xiaomi Notes and draw a smiley
+with a round outline, two eyes and a curved smile. Preserve existing notes.
+Read status and use only advertised actions. Take a fresh screenshot before
+each input and verify afterward. Save, reopen the new note to check the result,
+then call android_stop to release input.
+```
+
+Navigation and coordinates depend on your phone and current screen; the agent must observe them. Drawing requires calibrated HID: ADB control does not provide continuous `circle`/`path`. The **19-second video is sped up 5×** from a 95-second recording of drawing and saving; it excludes setup and does not represent total task time. [This recording](docs/acceptance/2026-10-14-mcp-smiley-recording.md) and the [earlier new-session acceptance](docs/acceptance/2026-10-13-codex-mcp-notes-smiley.md) document separate runs; neither is a success-rate benchmark.
+
+### Set a one-time alarm through MCP
+
+This second real-device recording uses Codex and `android_agent` MCP to create **tomorrow at 07:30**, save it as **one-time and enabled**, and verify the alarm list. The existing disabled 06:00, 07:00 and 08:00 alarms remain unchanged. It uses the same Android 15 / ESP32 BLE setup. ADB supplies observations and recording; all phone input goes through MCP and BLE.
+
+https://github.com/user-attachments/assets/d2361069-e9da-40d0-9476-7b103fe9ed76
+
+[Download the alarm demo MP4](docs/videos/mcp-alarm-demo.mp4) · [Acceptance and processing details](docs/acceptance/2026-10-14-mcp-alarm-recording.md)
+
+```text
+Use android_agent MCP to create a one-time alarm for tomorrow at 07:30.
+Preserve existing alarms. Read status, take a fresh screenshot before each
+input, and verify the result afterward. Save the new alarm enabled, reopen
+it to confirm its time and repeat setting, then call android_stop.
+```
+
+The **48-second demo runs at 5× speed**, derived from two recordings totaling about four minutes: creation up to selecting 07:30, followed by a later reopen/settings/save check. Android's recording limit ended the first clip before the initial save; the second clip ends on the enabled alarm list. The gap between them is not recorded. Playback duration is not real task time. Installation and first-use setup happened beforehand; the user completed Clock's privacy choice. Actual ringing was not tested. Choose your intended time when reproducing the task.
+
+### Earlier built-in agent checks
 
 Tested on 2026-10-13 using Windows, **Redmi Note14 5G / Android 15 / API 35**, ESP32-D0WD-V3 / 4MB, BLE **0.1.4**, and the configured `deepseek-flash` model:
 
@@ -114,7 +151,7 @@ Tested on 2026-10-13 using Windows, **Redmi Note14 5G / Android 15 / API 35**, E
 | Draw a smiley | Model chose 2 circles + 1 path; 114.91 seconds, 3 inputs; independent final check passed | Local whiteboard in phone Edge; angular mouth. Not native drawing-app acceptance or precision-curve evidence |
 | Create a native hello note | Model created and typed it. After manual intervention, a separate read-only task verified the newer note was saved: 133.03 seconds, 3 taps | Creation task failed to finish automatically; an old test draft was also mistakenly selected. Stable single-run completion is unproven |
 
-Closed paths, circles and release during motion also have real pointer-event and screenshot evidence. The [physical-device report](docs/acceptance/2026-10-13-redmi-note14-ble.md) retains failures and recovery history. These single-device examples are not a success-rate benchmark. The [earlier workbench capture](docs/images/workbench.jpg) predates the console redesign; [image provenance](docs/images/README.md) explains cropping and identifier redaction.
+Closed paths, circles and release during motion also have real pointer-event and screenshot evidence. The [physical-device report](docs/acceptance/2026-10-13-redmi-note14-ble.md) retains failures and recovery history. Older phone images remain in the repository as historical evidence; they are not used as the current console screenshot.
 
 ## Current limits
 
@@ -160,6 +197,10 @@ Open a **new Codex session** and ask it to use `android_agent` to inspect device
 
 Use **status → screenshot → one action → new screenshot to verify**. Coordinates are strict integers **0..1000 over the full screenshot**, not image pixels. Observations expire after 60 seconds and become invalid after submitted input or relevant device/session changes. Never replay an uncertain action; take a new screenshot first. Pause an internal workbench task and wait for release before MCP takeover.
 
+`android_action` exposes every built-in input: `tap`, `swipe`, `path`, `circle`, `long_press`, `scroll`, `type`, `key`, `home`, `back`, `recents` and `wait`. Status returns **current capabilities, allowed keys, action examples and drawing rules**. Calibrated HID supports continuous `path`/`circle`; ADB supports Android navigation and volume keys. Use the selected controller's advertised subset. Internal `done`/`fail`/`replan` decisions belong to task planning and send no phone input.
+
+**Native Notes drawing:** a new Codex desktop session used source MCP to create a Xiaomi Notes entry, draw a smiley, save it and reopen it on the tested Android 15/BLE device. One expired observation was rejected and one list target was mislocated before recovery; see the [acceptance record](docs/acceptance/2026-10-13-codex-mcp-notes-smiley.md). A later recorded replay provides the 5× demo above without replacing that history.
+
 Phone screenshots enter the external agent's model context. The bridge accepts only loopback HTTP addresses; it provides no remote MCP/OAuth, firmware installation or device-selection tools. Portable users currently need a separate Python MCP bridge. Authentication, other MCP-client configuration, action examples and troubleshooting: [MCP guide (Chinese)](docs/MCP.md).
 
 **Actual Codex acceptance:** Codex CLI 0.154.0 received real images and verified BLE taps, ASCII input, stale-observation rejection and stop on the Redmi Note14 / Android 15 / BLE 0.1.4 setup. The first attempt missed the text field; a second attempt succeeded with center-position guidance and visual focus confirmation. This is evidence for the listed setup, not general autonomous accuracy. See the [full report](docs/acceptance/2026-10-13-codex-mcp.md).
@@ -179,7 +220,7 @@ openspec validate --archived --no-interactive
 python scripts/check_changes.py
 ```
 
-The console redesign passed 9 frontend tests and three consecutive offline browser interaction runs covering navigation/drafts, persisted and failed saves, task controls, responsive layout and 200% CSS zoom. The latest local Python suite passed 347 tests with one Windows symlink-permission skip. These are software checks, not new hardware acceptance; see [UI validation](openspec/changes/archive/2026-10-13-redesign-local-console/validation.md).
+The console redesign passed 9 frontend tests and three consecutive offline browser interaction runs covering navigation/drafts, persisted and failed saves, task controls, responsive layout and 200% CSS zoom; see [UI validation](openspec/changes/archive/2026-10-13-redesign-local-console/validation.md). The latest MCP action-discovery change passed **369 Python tests on each of Python 3.10 and 3.12**, with one Windows symlink-permission skip and one dependency warning; its MCP subset passed 70 tests. [MCP validation](openspec/changes/archive/2026-10-13-complete-mcp-action-discovery/validation.md) records those software checks separately from real-device acceptance. Documentation and media updates do not imply another full regression run.
 
 CI is configured for Ubuntu/Windows × Python 3.10/3.12, web tests and four firmware builds, without devices or paid model services. [Architecture](docs/ARCHITECTURE.zh-CN.md) · [Publication checklist](docs/RELEASING.md).
 

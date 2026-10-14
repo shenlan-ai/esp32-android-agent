@@ -1,0 +1,9 @@
+README.md
+README.zh-CN.md
+docs/videos/mcp-notes-smiley.mp4
+docs/videos/mcp-alarm-demo.mp4
+docs/videos/README.md
+docs/acceptance/2026-10-14-mcp-smiley-recording.md
+docs/acceptance/2026-10-14-mcp-alarm-recording.md
+.runtime-local/demo-speed5*
+openspec/changes/speed-up-mcp-demo-videos/*

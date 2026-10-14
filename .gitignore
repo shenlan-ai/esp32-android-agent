@@ -21,6 +21,8 @@ secrets.h
 # User data may contain model keys, Wi-Fi credentials, phone screenshots or flash contents
 traces/
 .runtime-local/
+# Machine-specific source MCP registration; no credentials or absolute paths in Git
+/.codex/config.toml
 .esp32-android-agent/
 /settings.json
 /preferences.json

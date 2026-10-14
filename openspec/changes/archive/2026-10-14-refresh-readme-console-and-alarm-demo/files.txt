@@ -1,0 +1,9 @@
+README.md
+README.zh-CN.md
+docs/images/console-workbench.png
+docs/images/README.md
+docs/videos/mcp-alarm-demo.mp4
+docs/videos/README.md
+docs/acceptance/2026-10-14-mcp-alarm-recording.md
+openspec/changes/refresh-readme-console-and-alarm-demo/*
+.runtime-local/mcp-alarm-*

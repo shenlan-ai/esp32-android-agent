@@ -23,6 +23,20 @@ ACTION_FIELDS = {
     "recents": set(),
     "wait": {"duration_ms"},
 }
+ACTION_EXAMPLES = {
+    "tap": {"action": "tap", "x": 500, "y": 500},
+    "long_press": {"action": "long_press", "x": 500, "y": 500, "duration_ms": 800},
+    "swipe": {"action": "swipe", "x1": 500, "y1": 800, "x2": 500, "y2": 200, "duration_ms": 500},
+    "path": {"action": "path", "points": [[200, 300], [400, 300], [400, 500]], "duration_ms": 500},
+    "circle": {"action": "circle", "x": 500, "y": 500, "r": 50, "duration_ms": 500},
+    "scroll": {"action": "scroll", "x": 500, "y": 500, "lines": -3},
+    "type": {"action": "type", "text": "ASCII text"},
+    "key": {"action": "key", "key": "enter"},
+    "home": {"action": "home"},
+    "back": {"action": "back"},
+    "recents": {"action": "recents"},
+    "wait": {"action": "wait", "duration_ms": 500},
+}
 KEYS = {
     "enter": 66,
     "backspace": 67,
